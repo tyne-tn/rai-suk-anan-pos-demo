@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#173f35">
+  <title>ไร่สุขอนันต์ POS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=Sriracha&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/pos.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="index.html" aria-label="กลับหน้าเว็บไซต์ไร่สุขอนันต์">
+        <img src="assets/rai-suk-anan-logo.webp" width="52" height="52" alt="">
+        <span><strong>ไร่สุขอนันต์</strong><small>CAFE · POS</small></span>
+      </a>
+      <nav class="main-nav" aria-label="เมนูหลัก">
+        <button class="nav-item is-active" data-view="sale"><span>⌁</span>ขายสินค้า</button>
+        <button class="nav-item" data-view="orders"><span>☷</span>รายการขาย</button>
+        <button class="nav-item" data-view="reports"><span>↗</span>รายงาน</button>
+        <button class="nav-item" data-view="products"><span>◇</span>สินค้า</button>
+      </nav>
+      <div class="sidebar-foot">
+        <span class="status-dot"></span>
+        <span><strong>บันทึกในเครื่องนี้</strong><small id="saved-status">พร้อมใช้งาน</small></span>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="view-eyebrow">หน้าขาย</p>
+          <h1 id="view-title">รับออเดอร์ใหม่</h1>
+        </div>
+        <div class="topbar-actions">
+          <div class="live-clock"><strong id="clock-time">--:--</strong><span id="clock-date">---</span></div>
+          <button class="icon-button" id="export-button" title="สำรองข้อมูล" aria-label="สำรองข้อมูล">↓</button>
+        </div>
+      </header>
+
+      <section class="view is-active sale-view" id="sale-view">
+        <div class="catalog-panel">
+          <div class="catalog-tools">
+            <label class="search-box"><span>⌕</span><input id="product-search" type="search" placeholder="ค้นหาเมนู..." autocomplete="off"></label>
+            <div class="category-tabs" id="category-tabs" aria-label="หมวดหมู่สินค้า"></div>
+          </div>
+          <div class="product-grid" id="product-grid"></div>
+          <div class="empty-state" id="product-empty" hidden><span>⌕</span><strong>ไม่พบเมนูนี้</strong><p>ลองค้นหาด้วยคำอื่นหรือเลือกหมวดหมู่ทั้งหมด</p></div>
+        </div>
+
+        <aside class="cart-panel" aria-label="ออเดอร์ปัจจุบัน">
+          <div class="cart-head">
+            <div><p class="eyebrow">ออเดอร์ปัจจุบัน</p><h2>โต๊ะ / กลับบ้าน</h2></div>
+            <button class="text-button danger" id="clear-cart">ล้าง</button>
+          </div>
+          <div class="cart-items" id="cart-items"></div>
+          <div class="cart-empty" id="cart-empty"><span>🧺</span><strong>ยังไม่มีสินค้า</strong><p>แตะเมนูเพื่อเพิ่มลงออเดอร์</p></div>
+          <div class="cart-summary">
+            <div><span>จำนวนสินค้า</span><strong id="cart-count">0 รายการ</strong></div>
+            <div class="grand-total"><span>ยอดสุทธิ</span><strong id="cart-total">฿0</strong></div>
+            <button class="checkout-button" id="checkout-button" disabled><span>ชำระเงิน</span><strong id="checkout-total">฿0</strong></button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="view content-view" id="orders-view">
+        <div class="section-toolbar">
+          <div><h2>รายการขายทั้งหมด</h2><p>ตรวจสอบรายละเอียด พิมพ์ใบเสร็จ หรือยกเลิกรายการ</p></div>
+          <label class="date-filter">วันที่ <input type="date" id="orders-date"></label>
+        </div>
+        <div class="table-card">
+          <div class="data-table orders-table" id="orders-table"></div>
+        </div>
+      </section>
+
+      <section class="view content-view" id="reports-view">
+        <div class="section-toolbar">
+          <div><h2>ภาพรวมยอดขาย</h2><p>สรุปจากรายการที่ชำระสำเร็จ ไม่รวมรายการยกเลิก</p></div>
+          <label class="date-filter">วันที่ <input type="date" id="report-date"></label>
+        </div>
+        <div class="metric-grid">
+          <article class="metric-card accent"><span>ยอดขายสุทธิ</span><strong id="metric-revenue">฿0</strong><small>หลังหักรายการยกเลิก</small></article>
+          <article class="metric-card"><span>จำนวนออเดอร์</span><strong id="metric-orders">0</strong><small>รายการที่สำเร็จ</small></article>
+          <article class="metric-card"><span>เฉลี่ยต่อบิล</span><strong id="metric-average">฿0</strong><small>Average order value</small></article>
+        </div>
+        <div class="report-grid">
+          <article class="report-card"><div class="card-title"><h3>ช่องทางชำระเงิน</h3></div><div id="payment-breakdown" class="payment-breakdown"></div></article>
+          <article class="report-card"><div class="card-title"><h3>เมนูขายดี</h3><span>เรียงตามจำนวน</span></div><div id="top-products" class="rank-list"></div></article>
+        </div>
+      </section>
+
+      <section class="view content-view" id="products-view">
+        <div class="section-toolbar">
+          <div><h2>จัดการสินค้า</h2><p>เพิ่ม แก้ไขราคา หรือพักขายเมนู</p></div>
+          <button class="primary-button" id="add-product">＋ เพิ่มสินค้า</button>
+        </div>
+        <div class="product-admin-grid" id="product-admin-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="เมนูมือถือ">
+    <button class="is-active" data-view="sale"><span>⌁</span>ขาย</button>
+    <button data-view="orders"><span>☷</span>รายการ</button>
+    <button data-view="reports"><span>↗</span>รายงาน</button>
+    <button data-view="products"><span>◇</span>สินค้า</button>
+  </nav>
+
+  <dialog id="payment-dialog" class="modal payment-modal">
+    <form method="dialog" class="modal-card" id="payment-form">
+      <div class="modal-head"><div><p class="eyebrow">CHECKOUT</p><h2>รับชำระเงิน</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
+      <div class="amount-hero"><span>ยอดที่ต้องชำระ</span><strong id="payment-total">฿0</strong></div>
+      <fieldset class="payment-methods"><legend>เลือกช่องทางชำระ</legend><label><input type="radio" name="payment" value="cash" checked><span>💵</span><strong>เงินสด</strong></label><label><input type="radio" name="payment" value="qr"><span>▦</span><strong>สแกน QR</strong></label></fieldset>
+      <div class="cash-section" id="cash-section"><label>รับเงินมา<input id="cash-received" type="number" inputmode="decimal" min="0" step="1" placeholder="0"></label><div class="quick-cash" id="quick-cash"></div><div class="change-row"><span>เงินทอน</span><strong id="cash-change">฿0</strong></div></div>
+      <p class="form-error" id="payment-error" role="alert"></p>
+      <button class="checkout-button confirm-payment" id="confirm-payment" value="default"><span>ยืนยันการชำระเงิน</span><strong>✓</strong></button>
+    </form>
+  </dialog>
+
+  <dialog id="product-dialog" class="modal">
+    <form method="dialog" class="modal-card" id="product-form">
+      <div class="modal-head"><div><p class="eyebrow">PRODUCT</p><h2 id="product-form-title">เพิ่มสินค้า</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
+      <input type="hidden" id="product-id">
+      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคา (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>หมวดหมู่<input id="product-category" required maxlength="30" list="category-list"></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label></div>
+      <datalist id="category-list"></datalist>
+      <p class="form-error" id="product-error" role="alert"></p>
+      <button class="primary-button full-button" id="save-product" value="default">บันทึกสินค้า</button>
+    </form>
+  </dialog>
+
+  <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="assets/pos-app.js"></script>
+</body>
+</html>
