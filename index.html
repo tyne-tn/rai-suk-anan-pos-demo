@@ -93,9 +93,13 @@
         </div>
         <div class="metric-grid">
           <article class="metric-card accent"><span>ยอดขายสุทธิ</span><strong id="metric-revenue">฿0</strong><small>หลังหักรายการยกเลิก</small></article>
+          <article class="metric-card"><span>ต้นทุนสินค้าที่ขาย</span><strong id="metric-cost">฿0</strong><small>ตามต้นทุนที่บันทึกตอนขาย</small></article>
+          <article class="metric-card profit"><span>กำไรขั้นต้น</span><strong id="metric-profit">฿0</strong><small>ยอดขาย − ต้นทุนสินค้า</small></article>
+          <article class="metric-card"><span>อัตรากำไรขั้นต้น</span><strong id="metric-margin">0%</strong><small>Gross margin</small></article>
           <article class="metric-card"><span>จำนวนออเดอร์</span><strong id="metric-orders">0</strong><small>รายการที่สำเร็จ</small></article>
           <article class="metric-card"><span>เฉลี่ยต่อบิล</span><strong id="metric-average">฿0</strong><small>Average order value</small></article>
         </div>
+        <p class="profit-cost-warning" id="profit-cost-warning" hidden></p>
         <div class="report-grid">
           <article class="report-card"><div class="card-title"><h3>ช่องทางชำระเงิน</h3></div><div id="payment-breakdown" class="payment-breakdown"></div></article>
           <article class="report-card"><div class="card-title"><h3>เมนูขายดี</h3><span>เรียงตามจำนวน</span></div><div id="top-products" class="rank-list"></div></article>
@@ -151,7 +155,7 @@
     <form method="dialog" class="modal-card" id="product-form">
       <div class="modal-head"><div><p class="eyebrow">PRODUCT</p><h2 id="product-form-title">เพิ่มสินค้า</h2></div><button type="button" class="close-button" data-close-dialog="product-dialog" aria-label="ปิด">×</button></div>
       <input type="hidden" id="product-id">
-      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคา (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>หมวดหมู่<input id="product-category" required maxlength="30" list="category-list"></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label><label class="feature-toggle"><span><strong>ของเพิ่ม</strong><small>แสดงตัวเลือกเพิ่มข้าวและไข่ในหน้าขาย</small></span><input id="product-addons-enabled" type="checkbox" role="switch"></label><label class="product-image-field">รูปสินค้า<input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><span class="product-image-preview"><img id="product-image-preview" alt="ตัวอย่างรูปสินค้า" hidden><span id="product-image-placeholder">เลือกรูปหรือถ่ายภาพ</span></span><button type="button" class="text-button danger" id="remove-product-image" hidden>ลบรูป</button></label></div>
+      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคาขาย (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>ต้นทุนต่อหน่วย (บาท)<input id="product-cost" type="number" min="0" step="0.01" placeholder="ยังไม่ระบุ"></label><label>หมวดหมู่<input id="product-category" required maxlength="30" list="category-list"></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label><label class="feature-toggle"><span><strong>ของเพิ่ม</strong><small>แสดงตัวเลือกเพิ่มข้าวและไข่ในหน้าขาย</small></span><input id="product-addons-enabled" type="checkbox" role="switch"></label><label class="product-image-field">รูปสินค้า<input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><span class="product-image-preview"><img id="product-image-preview" alt="ตัวอย่างรูปสินค้า" hidden><span id="product-image-placeholder">เลือกรูปหรือถ่ายภาพ</span></span><button type="button" class="text-button danger" id="remove-product-image" hidden>ลบรูป</button></label></div>
       <datalist id="category-list"></datalist>
       <p class="form-error" id="product-error" role="alert"></p>
       <div class="product-form-actions">
@@ -178,6 +182,6 @@
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
   <section class="kitchen-print-root" id="kitchen-print-root" aria-hidden="true"></section>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/pos-app.js?v=kitchen-print-v1"></script>
+  <script type="module" src="assets/pos-app.js?v=daily-profit-v1"></script>
 </body>
 </html>

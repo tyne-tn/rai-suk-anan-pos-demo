@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=kitchen-print-v1';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=daily-profit-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
@@ -527,8 +527,14 @@ function voidOrder(orderId) {
 function renderReports() {
   const summary = summarizeOrders(filteredOrders('#report-date'));
   $('#metric-revenue').textContent = money.format(summary.revenue);
+  $('#metric-cost').textContent = money.format(summary.costOfGoods);
+  $('#metric-profit').textContent = money.format(summary.grossProfit);
+  $('#metric-margin').textContent = `${summary.grossMargin.toLocaleString('th-TH', { maximumFractionDigits: 1 })}%`;
   $('#metric-orders').textContent = summary.orderCount.toLocaleString('th-TH');
   $('#metric-average').textContent = money.format(summary.averageOrderValue);
+  const costWarning = $('#profit-cost-warning');
+  costWarning.hidden = summary.missingCostItemCount === 0;
+  costWarning.textContent = summary.missingCostItemCount ? `กำไรยังไม่สมบูรณ์: มีสินค้าที่ขาย ${summary.missingCostItemCount.toLocaleString('th-TH')} ชิ้นที่ยังไม่ได้ระบุต้นทุน` : '';
   const paymentData = [
     ['💵', 'เงินสด', summary.paymentTotals.cash],
     ['▦', 'สแกน QR', summary.paymentTotals.qr],
@@ -538,7 +544,7 @@ function renderReports() {
 }
 
 function renderProductAdmin() {
-  $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}">${productVisual(product, 'admin-photo', 'admin-emoji')}<span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ${money.format(product.price)}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? 'Ⅱ' : '▶'}</button></span></article>`).join('');
+  $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}">${productVisual(product, 'admin-photo', 'admin-emoji')}<span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ขาย ${money.format(product.price)} · ${Number.isFinite(Number(product.cost)) ? `ต้นทุน ${money.format(Number(product.cost))}` : 'ยังไม่ใส่ต้นทุน'}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? 'Ⅱ' : '▶'}</button></span></article>`).join('');
 }
 
 function openProductForm(productId = '') {
@@ -547,6 +553,7 @@ function openProductForm(productId = '') {
   $('#product-id').value = product?.id || '';
   $('#product-name').value = product?.name || '';
   $('#product-price').value = product?.price || '';
+  $('#product-cost').value = Number.isFinite(Number(product?.cost)) ? product.cost : '';
   $('#product-category').value = product?.category || '';
   $('#product-emoji').value = product?.emoji || '☕';
   $('#product-addons-enabled').checked = product ? supportsAddOns(product) : true;
@@ -563,18 +570,21 @@ function saveProduct(event) {
   const name = $('#product-name').value.trim();
   const category = $('#product-category').value.trim();
   const price = Number($('#product-price').value);
+  const costValue = $('#product-cost').value.trim();
+  const cost = costValue === '' ? undefined : Number(costValue);
   const emoji = $('#product-emoji').value.trim() || '☕';
   const addOnsEnabled = $('#product-addons-enabled').checked;
-  if (!name || !category || !Number.isFinite(price) || price <= 0) {
-    $('#product-error').textContent = 'กรุณากรอกชื่อ หมวดหมู่ และราคาให้ถูกต้อง';
+  if (!name || !category || !Number.isFinite(price) || price <= 0 || (cost !== undefined && (!Number.isFinite(cost) || cost < 0))) {
+    $('#product-error').textContent = 'กรุณากรอกชื่อ หมวดหมู่ ราคาขาย และต้นทุนให้ถูกต้อง';
     return;
   }
   if (id) {
     const product = state.products.find((item) => item.id === id);
-    Object.assign(product, { name, category, price, emoji, image: pendingProductImage, addOnsEnabled });
+    Object.assign(product, { name, category, price, cost, emoji, image: pendingProductImage, addOnsEnabled });
+    if (cost === undefined) delete product.cost;
   } else {
     const newId = `product-${Date.now()}`;
-    state.products.push({ id: newId, name, category, price, emoji, image: pendingProductImage, addOnsEnabled, active: true });
+    state.products.push({ id: newId, name, category, price, ...(cost === undefined ? {} : { cost }), emoji, image: pendingProductImage, addOnsEnabled, active: true });
   }
   save(STORAGE_KEYS.products, state.products);
   $('#product-dialog').close();

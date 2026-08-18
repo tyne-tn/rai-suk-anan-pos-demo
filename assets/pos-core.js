@@ -97,6 +97,9 @@ export function calculateCart(cart, products) {
     const addOnTotal = addOns.reduce((total, addOn) => total + addOn.price, 0);
     const unitPrice = product.price + addOnTotal;
     const lineTotal = unitPrice * quantity;
+    const hasCost = product.cost !== undefined && product.cost !== null && product.cost !== '' && Number.isFinite(Number(product.cost)) && Number(product.cost) >= 0;
+    const unitCost = hasCost ? Number(product.cost) : null;
+    const lineCost = hasCost ? unitCost * quantity : null;
     const spiceLevel = supportsSpiceLevel(product) ? entry.spiceLevel || 'เผ็ดกลาง' : undefined;
     if (spiceLevel && !SPICE_LEVELS.includes(spiceLevel)) throw new Error('ระดับความเผ็ดไม่ถูกต้อง');
     subtotal += lineTotal;
@@ -109,6 +112,8 @@ export function calculateCart(cart, products) {
       unitPrice,
       quantity,
       lineTotal,
+      unitCost,
+      lineCost,
       addOns,
       note: String(entry.note || '').trim().slice(0, 120),
       ...(spiceLevel ? { spiceLevel } : {}),
@@ -196,6 +201,8 @@ export function summarizeOrders(orders) {
   const productTotals = new Map();
   const paymentTotals = { cash: 0, qr: 0 };
   let revenue = 0;
+  let costOfGoods = 0;
+  let missingCostItemCount = 0;
 
   completed.forEach((order) => {
     revenue += order.total;
@@ -203,6 +210,8 @@ export function summarizeOrders(orders) {
       paymentTotals[order.paymentMethod] += order.total;
     }
     order.items.forEach((item) => {
+      if (Number.isFinite(item.lineCost)) costOfGoods += item.lineCost;
+      else missingCostItemCount += item.quantity;
       const current = productTotals.get(item.productId) || {
         productId: item.productId,
         name: item.name,
@@ -216,8 +225,13 @@ export function summarizeOrders(orders) {
   });
 
   const orderCount = completed.length;
+  const grossProfit = revenue - costOfGoods;
   return {
     revenue,
+    costOfGoods,
+    grossProfit,
+    grossMargin: revenue ? grossProfit / revenue * 100 : 0,
+    missingCostItemCount,
     orderCount,
     averageOrderValue: orderCount ? revenue / orderCount : 0,
     paymentTotals,
