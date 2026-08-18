@@ -45,6 +45,57 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+let pendingProductImage = '';
+
+function safeProductImage(value) {
+  return typeof value === 'string' && /^data:image\/(?:jpeg|png|webp);base64,/i.test(value) ? value : '';
+}
+
+function productVisual(product, imageClass, emojiClass) {
+  const image = safeProductImage(product?.image);
+  return image
+    ? `<img class="${imageClass}" src="${image}" alt="">`
+    : `<span class="${emojiClass}">${escapeHtml(product?.emoji || '☕')}</span>`;
+}
+
+function updateProductImagePreview(image = '') {
+  const safeImage = safeProductImage(image);
+  const preview = $('#product-image-preview');
+  preview.hidden = !safeImage;
+  preview.src = safeImage;
+  $('#product-image-placeholder').hidden = Boolean(safeImage);
+  $('#remove-product-image').hidden = !safeImage;
+}
+
+function compressProductImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      reject(new Error('รองรับเฉพาะไฟล์ JPG, PNG และ WebP'));
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      reject(new Error('รูปต้องมีขนาดไม่เกิน 8 MB'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('อ่านไฟล์รูปไม่สำเร็จ'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('ไฟล์รูปไม่ถูกต้อง'));
+      image.onload = () => {
+        const scale = Math.min(1, 640 / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/webp', 0.76));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function dateKey(value) {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -92,7 +143,7 @@ function renderProducts() {
 
   $('#product-grid').innerHTML = products.map((product) => `
     <button class="product-card" data-add-product="${escapeHtml(product.id)}">
-      <span class="product-emoji">${escapeHtml(product.emoji || '☕')}</span>
+      ${productVisual(product, 'product-photo', 'product-emoji')}
       <span class="product-category">${escapeHtml(product.category)}</span>
       <strong>${escapeHtml(product.name)}</strong>
       <span class="product-price">${money.format(product.price)}</span>
@@ -141,7 +192,7 @@ function renderCart() {
     const product = productMap.get(item.productId);
     const spiceSelector = item.spiceLevel ? `<label class="spice-picker">ระดับความเผ็ด <select data-spice-product="${escapeHtml(item.productId)}" aria-label="ระดับความเผ็ดของ ${escapeHtml(item.name)}">${SPICE_LEVELS.map((level) => `<option value="${escapeHtml(level)}"${level === item.spiceLevel ? ' selected' : ''}>${escapeHtml(level)}</option>`).join('')}</select></label>` : '';
     return `<div class="cart-line">
-      <div class="cart-line-main"><span class="line-emoji">${escapeHtml(product?.emoji || '☕')}</span><span class="cart-line-name"><strong>${escapeHtml(item.name)}</strong><small>${money.format(item.unitPrice)} / ชิ้น</small>${spiceSelector}</span></div>
+      <div class="cart-line-main">${productVisual(product, 'line-photo', 'line-emoji')}<span class="cart-line-name"><strong>${escapeHtml(item.name)}</strong><small>${money.format(item.unitPrice)} / ชิ้น</small>${spiceSelector}</span></div>
       <div class="cart-line-side"><strong class="line-total">${money.format(item.lineTotal)}</strong><div class="quantity-stepper"><button data-quantity="-1" data-product="${escapeHtml(item.productId)}" aria-label="ลดจำนวน">−</button><span>${item.quantity}</span><button data-quantity="1" data-product="${escapeHtml(item.productId)}" aria-label="เพิ่มจำนวน">＋</button></div></div>
     </div>`;
   }).join('');
@@ -245,7 +296,7 @@ function renderReports() {
 }
 
 function renderProductAdmin() {
-  $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}"><span class="admin-emoji">${escapeHtml(product.emoji || '☕')}</span><span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ${money.format(product.price)}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? 'Ⅱ' : '▶'}</button></span></article>`).join('');
+  $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}">${productVisual(product, 'admin-photo', 'admin-emoji')}<span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ${money.format(product.price)}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? 'Ⅱ' : '▶'}</button></span></article>`).join('');
 }
 
 function openProductForm(productId = '') {
@@ -256,6 +307,8 @@ function openProductForm(productId = '') {
   $('#product-price').value = product?.price || '';
   $('#product-category').value = product?.category || '';
   $('#product-emoji').value = product?.emoji || '☕';
+  pendingProductImage = safeProductImage(product?.image);
+  updateProductImagePreview(pendingProductImage);
   $('#product-form-title').textContent = product ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า';
   $('#product-error').textContent = '';
   $('#product-dialog').showModal();
@@ -274,10 +327,10 @@ function saveProduct(event) {
   }
   if (id) {
     const product = state.products.find((item) => item.id === id);
-    Object.assign(product, { name, category, price, emoji });
+    Object.assign(product, { name, category, price, emoji, image: pendingProductImage });
   } else {
     const newId = `product-${Date.now()}`;
-    state.products.push({ id: newId, name, category, price, emoji, active: true });
+    state.products.push({ id: newId, name, category, price, emoji, image: pendingProductImage, active: true });
   }
   save(STORAGE_KEYS.products, state.products);
   $('#product-dialog').close();
@@ -349,6 +402,24 @@ $('#orders-table').addEventListener('click', (event) => { const receipt = event.
 $('#add-product').addEventListener('click', () => openProductForm());
 $('#product-admin-grid').addEventListener('click', (event) => { const edit = event.target.closest('[data-edit-product]'); const toggle = event.target.closest('[data-toggle-product]'); if (edit) openProductForm(edit.dataset.editProduct); if (toggle) toggleProduct(toggle.dataset.toggleProduct); });
 $('#product-form').addEventListener('submit', saveProduct);
+$('#product-image').addEventListener('change', async (event) => {
+  const [file] = event.target.files;
+  if (!file) return;
+  $('#product-error').textContent = 'กำลังเตรียมรูป...';
+  try {
+    pendingProductImage = await compressProductImage(file);
+    updateProductImagePreview(pendingProductImage);
+    $('#product-error').textContent = '';
+  } catch (error) {
+    event.target.value = '';
+    $('#product-error').textContent = error.message;
+  }
+});
+$('#remove-product-image').addEventListener('click', () => {
+  pendingProductImage = '';
+  $('#product-image').value = '';
+  updateProductImagePreview();
+});
 $('#receipt-dialog').addEventListener('click', (event) => { if (event.target.closest('[data-close-receipt]')) $('#receipt-dialog').close(); if (event.target.closest('[data-print-receipt]')) window.print(); });
 $('#export-button').addEventListener('click', exportData);
 $('.cart-head').addEventListener('click', (event) => { if (window.innerWidth <= 760 && !event.target.closest('button')) $('.cart-panel').classList.toggle('is-open'); });

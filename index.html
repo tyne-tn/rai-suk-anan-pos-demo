@@ -125,7 +125,7 @@
     <form method="dialog" class="modal-card" id="product-form">
       <div class="modal-head"><div><p class="eyebrow">PRODUCT</p><h2 id="product-form-title">เพิ่มสินค้า</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
       <input type="hidden" id="product-id">
-      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคา (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>หมวดหมู่<input id="product-category" required maxlength="30" list="category-list"></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label></div>
+      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคา (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>หมวดหมู่<input id="product-category" required maxlength="30" list="category-list"></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label><label class="product-image-field">รูปสินค้า<input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><span class="product-image-preview"><img id="product-image-preview" alt="ตัวอย่างรูปสินค้า" hidden><span id="product-image-placeholder">เลือกรูปหรือถ่ายภาพ</span></span><button type="button" class="text-button danger" id="remove-product-image" hidden>ลบรูป</button></label></div>
       <datalist id="category-list"></datalist>
       <p class="form-error" id="product-error" role="alert"></p>
       <button class="primary-button full-button" id="save-product" value="default">บันทึกสินค้า</button>
