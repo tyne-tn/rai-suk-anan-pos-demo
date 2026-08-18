@@ -1,10 +1,12 @@
-import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createOrder, groupCatalogProducts, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=addon-toggle-v1';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=held-orders-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
   orders: 'rai-pos-orders-v2',
   cart: 'rai-pos-cart-v2',
   serviceLocation: 'rai-pos-service-location-v1',
+  heldOrders: 'rai-pos-held-orders-v1',
+  currentHeldOrder: 'rai-pos-current-held-order-v1',
 };
 
 const productMetadata = new Map(DEFAULT_PRODUCTS.map((product) => [product.id, product]));
@@ -14,6 +16,8 @@ const state = {
   orders: load(STORAGE_KEYS.orders, []),
   cart: load(STORAGE_KEYS.cart, []),
   serviceLocation: loadObject(STORAGE_KEYS.serviceLocation),
+  heldOrders: load(STORAGE_KEYS.heldOrders, []),
+  currentHeldOrderId: localStorage.getItem(STORAGE_KEYS.currentHeldOrder) || '',
   category: 'ทั้งหมด',
   query: '',
 };
@@ -153,6 +157,12 @@ function saveServiceLocation(location) {
   if (location) localStorage.setItem(STORAGE_KEYS.serviceLocation, JSON.stringify(location));
   else localStorage.removeItem(STORAGE_KEYS.serviceLocation);
   renderLocationLabel();
+}
+
+function setCurrentHeldOrder(orderId = '') {
+  state.currentHeldOrderId = orderId;
+  if (orderId) localStorage.setItem(STORAGE_KEYS.currentHeldOrder, orderId);
+  else localStorage.removeItem(STORAGE_KEYS.currentHeldOrder);
 }
 
 function renderLocationLabel() {
@@ -319,6 +329,80 @@ function renderCart() {
   $('#cart-total').textContent = money.format(totals.total);
   $('#checkout-total').textContent = money.format(totals.total);
   $('#checkout-button').disabled = totals.itemCount === 0;
+  $('#hold-order').disabled = totals.itemCount === 0;
+  $('#hold-order-label').textContent = state.currentHeldOrderId ? 'อัปเดตบิลพัก' : 'พักบิล';
+}
+
+function holdCurrentOrder() {
+  const totals = cartTotals();
+  if (!totals.itemCount) return;
+  if (!state.serviceLocation) {
+    openLocationDialog();
+    showToast('เลือกโซนและโต๊ะก่อนพักบิล');
+    return;
+  }
+  const current = state.heldOrders.find((order) => order.id === state.currentHeldOrderId);
+  const duplicate = state.heldOrders.find((order) => order.id !== state.currentHeldOrderId && isSameServiceLocation(order.serviceLocation, state.serviceLocation));
+  if (duplicate) {
+    showToast(`${duplicate.serviceLocation.label} มีบิลพักอยู่แล้ว`);
+    return;
+  }
+  const held = createHeldOrder({
+    cart: state.cart,
+    products: state.products,
+    serviceLocation: state.serviceLocation,
+    id: current?.id,
+    createdAt: current?.createdAt,
+  });
+  if (current) state.heldOrders = state.heldOrders.map((order) => order.id === held.id ? held : order);
+  else state.heldOrders.unshift(held);
+  save(STORAGE_KEYS.heldOrders, state.heldOrders);
+  state.cart = [];
+  save(STORAGE_KEYS.cart, state.cart);
+  saveServiceLocation(null);
+  setCurrentHeldOrder();
+  renderCart();
+  renderHeldOrders();
+  showToast(`พักบิล ${held.serviceLocation.label} แล้ว`);
+}
+
+function resumeHeldOrder(orderId) {
+  const held = state.heldOrders.find((order) => order.id === orderId);
+  if (!held) return;
+  if (state.cart.length && state.currentHeldOrderId !== orderId && !window.confirm('แทนที่ออเดอร์ที่กำลังทำด้วยบิลพักนี้?')) return;
+  state.cart = structuredClone(held.cart);
+  save(STORAGE_KEYS.cart, state.cart);
+  saveServiceLocation(held.serviceLocation);
+  setCurrentHeldOrder(held.id);
+  renderCart();
+  renderHeldOrders();
+  switchView('sale');
+  showToast(`เรียกบิล ${held.serviceLocation.label} แล้ว`);
+}
+
+function cancelHeldOrder(orderId) {
+  const held = state.heldOrders.find((order) => order.id === orderId);
+  if (!held || !window.confirm(`ยกเลิกบิลพัก ${held.serviceLocation.label}?`)) return;
+  state.heldOrders = state.heldOrders.filter((order) => order.id !== orderId);
+  save(STORAGE_KEYS.heldOrders, state.heldOrders);
+  if (state.currentHeldOrderId === orderId) {
+    state.cart = [];
+    save(STORAGE_KEYS.cart, state.cart);
+    saveServiceLocation(null);
+    setCurrentHeldOrder();
+    renderCart();
+  }
+  renderHeldOrders();
+  showToast('ยกเลิกบิลพักแล้ว');
+}
+
+function renderHeldOrders() {
+  $('#held-order-count').textContent = `${state.heldOrders.length} บิล`;
+  $('#held-orders').innerHTML = state.heldOrders.map((order) => `<article class="held-order-card ${order.id === state.currentHeldOrderId ? 'is-active' : ''}">
+    <div><strong>${escapeHtml(order.serviceLocation.label)}</strong><small>พักเมื่อ ${dateTime.format(new Date(order.updatedAt))} · ${order.itemCount} ชิ้น</small></div>
+    <strong>${money.format(order.total)}</strong>
+    <div class="held-order-actions"><button type="button" data-resume-held="${escapeHtml(order.id)}">${order.id === state.currentHeldOrderId ? 'กำลังเปิด' : 'เรียกบิล'}</button><button type="button" class="danger" data-cancel-held="${escapeHtml(order.id)}">ยกเลิก</button></div>
+  </article>`).join('') || '<div class="held-orders-empty">ยังไม่มีบิลที่พักไว้</div>';
 }
 
 function updatePayment() {
@@ -364,12 +448,18 @@ function completePayment(event) {
       serviceLocation: state.serviceLocation,
     });
     state.orders.unshift(order);
+    if (state.currentHeldOrderId) {
+      state.heldOrders = state.heldOrders.filter((held) => held.id !== state.currentHeldOrderId);
+      save(STORAGE_KEYS.heldOrders, state.heldOrders);
+      setCurrentHeldOrder();
+    }
     state.cart = [];
     save(STORAGE_KEYS.orders, state.orders);
     save(STORAGE_KEYS.cart, state.cart);
     saveServiceLocation(null);
     $('#payment-dialog').close();
     renderCart();
+    renderHeldOrders();
     renderOrders();
     renderReports();
     showReceipt(order);
@@ -385,6 +475,7 @@ function filteredOrders(inputId) {
 }
 
 function renderOrders() {
+  renderHeldOrders();
   const orders = filteredOrders('#orders-date');
   const rows = orders.map((order) => `<div class="table-row">
     <span class="order-id"><strong>${escapeHtml(order.orderNumber)}</strong><small>${escapeHtml(order.serviceLocation?.label || 'ไม่ระบุโต๊ะ')} · ${dateTime.format(new Date(order.createdAt))}</small></span>
@@ -501,7 +592,7 @@ function switchView(viewName) {
 }
 
 function exportData() {
-  const payload = JSON.stringify({ exportedAt: new Date().toISOString(), products: state.products, orders: state.orders }, null, 2);
+  const payload = JSON.stringify({ exportedAt: new Date().toISOString(), products: state.products, orders: state.orders, heldOrders: state.heldOrders }, null, 2);
   const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
@@ -517,6 +608,13 @@ $('#category-tabs').addEventListener('click', (event) => { const button = event.
 $('#product-grid').addEventListener('click', (event) => { const button = event.target.closest('[data-product-group]'); if (button) openItemForm(button.dataset.productGroup); });
 $('#cart-items').addEventListener('click', (event) => { const button = event.target.closest('[data-quantity]'); if (button) changeQuantity(button.dataset.line, Number(button.dataset.quantity)); });
 $('#cart-items').addEventListener('change', (event) => { const select = event.target.closest('[data-spice-line]'); if (select) changeSpiceLevel(select.dataset.spiceLine, select.value); });
+$('#hold-order').addEventListener('click', holdCurrentOrder);
+$('#held-orders').addEventListener('click', (event) => {
+  const resume = event.target.closest('[data-resume-held]');
+  const cancel = event.target.closest('[data-cancel-held]');
+  if (resume) resumeHeldOrder(resume.dataset.resumeHeld);
+  if (cancel) cancelHeldOrder(cancel.dataset.cancelHeld);
+});
 $('#item-form').addEventListener('submit', confirmItem);
 $('#item-form').addEventListener('click', (event) => {
   if (!itemDraft) return;
@@ -530,7 +628,7 @@ $('#item-form').addEventListener('click', (event) => {
   if (event.target.closest('#item-quantity-plus')) itemDraft.quantity += 1;
   if (variant || spice || addOn || event.target.closest('#item-quantity-minus, #item-quantity-plus')) renderItemForm();
 });
-$('#clear-cart').addEventListener('click', () => { if ((!state.cart.length && !state.serviceLocation) || window.confirm('ล้างออเดอร์ปัจจุบัน?')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); saveServiceLocation(null); renderCart(); } });
+$('#clear-cart').addEventListener('click', () => { if ((!state.cart.length && !state.serviceLocation) || window.confirm('ล้างออเดอร์ปัจจุบัน?\nบิลที่พักไว้จะยังอยู่ในหน้ารายการขาย')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); saveServiceLocation(null); setCurrentHeldOrder(); renderCart(); renderHeldOrders(); } });
 $('#choose-location').addEventListener('click', openLocationDialog);
 $('#location-form').addEventListener('submit', confirmLocation);
 $('#cancel-location').addEventListener('click', () => $('#location-dialog').close('cancel'));
@@ -585,6 +683,7 @@ renderLocationLabel();
 renderCategories();
 renderProducts();
 renderCart();
+renderHeldOrders();
 renderOrders();
 renderReports();
 renderProductAdmin();

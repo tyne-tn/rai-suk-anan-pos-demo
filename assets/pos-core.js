@@ -60,6 +60,11 @@ function normalizeServiceLocation(value) {
   return { type: 'table', zone: zone.name, table, label: `โซน ${zone.name} · โต๊ะ ${table}` };
 }
 
+export function isSameServiceLocation(first, second) {
+  if (first?.type !== 'table' || second?.type !== 'table') return false;
+  return first.zone === second.zone && Number(first.table) === Number(second.table);
+}
+
 function assertFinitePositive(value, message) {
   if (!Number.isFinite(value) || value <= 0) throw new Error(message);
 }
@@ -159,6 +164,30 @@ export function createOrder({
     change: received - totals.total,
     status: 'completed',
     serviceLocation: location,
+  };
+}
+
+export function createHeldOrder({
+  cart,
+  products,
+  serviceLocation,
+  now = new Date(),
+  id = `held-${now.getTime()}`,
+  createdAt,
+}) {
+  const totals = calculateCart(cart, products);
+  if (totals.itemCount === 0) throw new Error('กรุณาเลือกสินค้า');
+  const location = normalizeServiceLocation(serviceLocation);
+  const timestamp = now.toISOString();
+  return {
+    id,
+    status: 'held',
+    createdAt: createdAt || timestamp,
+    updatedAt: timestamp,
+    cart: structuredClone(cart),
+    serviceLocation: location,
+    itemCount: totals.itemCount,
+    total: totals.total,
   };
 }
 

@@ -63,12 +63,19 @@
           <div class="cart-summary">
             <div><span>จำนวนสินค้า</span><strong id="cart-count">0 รายการ</strong></div>
             <div class="grand-total"><span>ยอดสุทธิ</span><strong id="cart-total">฿0</strong></div>
-            <button class="checkout-button" id="checkout-button" disabled><span>ชำระเงิน</span><strong id="checkout-total">฿0</strong></button>
+            <div class="cart-checkout-actions">
+              <button type="button" class="hold-order-button" id="hold-order" disabled><span id="hold-order-label">พักบิล</span><strong>Ⅱ</strong></button>
+              <button class="checkout-button" id="checkout-button" disabled><span>ชำระเงิน</span><strong id="checkout-total">฿0</strong></button>
+            </div>
           </div>
         </aside>
       </section>
 
       <section class="view content-view" id="orders-view">
+        <section class="held-orders-section">
+          <div class="held-orders-head"><div><p class="eyebrow">OPEN TABLES</p><h2>บิลที่พักไว้</h2></div><strong id="held-order-count">0 บิล</strong></div>
+          <div class="held-orders" id="held-orders"></div>
+        </section>
         <div class="section-toolbar">
           <div><h2>รายการขายทั้งหมด</h2><p>ตรวจสอบรายละเอียด พิมพ์ใบเสร็จ หรือยกเลิกรายการ</p></div>
           <label class="date-filter">วันที่ <input type="date" id="orders-date"></label>
@@ -169,6 +176,6 @@
 
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/pos-app.js?v=addon-toggle-v1"></script>
+  <script type="module" src="assets/pos-app.js?v=held-orders-v1"></script>
 </body>
 </html>
