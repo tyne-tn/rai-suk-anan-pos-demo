@@ -54,9 +54,10 @@
 
         <aside class="cart-panel" aria-label="ออเดอร์ปัจจุบัน">
           <div class="cart-head">
-            <div><p class="eyebrow">ออเดอร์ปัจจุบัน</p><h2>โต๊ะ / กลับบ้าน</h2></div>
+            <div><p class="eyebrow">ออเดอร์ปัจจุบัน</p><h2 id="order-location-label">ยังไม่เลือกโต๊ะ</h2></div>
             <button class="text-button danger" id="clear-cart">ล้าง</button>
           </div>
+          <button type="button" class="location-selector" id="choose-location"><span>⌖</span><strong>เลือกโซน / โต๊ะ</strong><span>›</span></button>
           <div class="cart-items" id="cart-items"></div>
           <div class="cart-empty" id="cart-empty"><span>🧺</span><strong>ยังไม่มีสินค้า</strong><p>แตะเมนูเพื่อเพิ่มลงออเดอร์</p></div>
           <div class="cart-summary">
@@ -110,6 +111,20 @@
     <button data-view="products"><span>◇</span>สินค้า</button>
   </nav>
 
+  <dialog id="location-dialog" class="modal location-modal">
+    <form method="dialog" class="modal-card" id="location-form">
+      <div class="modal-head"><div><p class="eyebrow">SERVICE AREA</p><h2>เลือกโซนและโต๊ะ</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
+      <button type="button" class="takeaway-button" id="select-takeaway"><span>🥡</span><strong>ลูกค้ารับกลับบ้าน</strong></button>
+      <section class="location-section"><h3>เลือกโซน</h3><div class="zone-options" id="zone-options"></div></section>
+      <section class="location-section"><h3>เลือกโต๊ะ</h3><div class="table-options" id="table-options"></div></section>
+      <p class="form-error" id="location-error" role="alert"></p>
+      <div class="product-form-actions">
+        <button type="button" class="cancel-button" id="cancel-location">ยกเลิก</button>
+        <button class="primary-button full-button" id="confirm-location" value="default">ยืนยันโต๊ะ</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="payment-dialog" class="modal payment-modal">
     <form method="dialog" class="modal-card" id="payment-form">
       <div class="modal-head"><div><p class="eyebrow">CHECKOUT</p><h2>รับชำระเงิน</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
@@ -151,6 +166,6 @@
 
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/pos-app.js"></script>
+  <script type="module" src="assets/pos-app.js?v=zones-v1"></script>
 </body>
 </html>

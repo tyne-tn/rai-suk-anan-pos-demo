@@ -22,7 +22,7 @@ test('item customization adds extras per quantity and keeps note', () => {
   assert.equal(totals.items[0].note, 'ไม่ใส่ถั่วฝักยาว');
   assert.equal(totals.items[0].addOns.length, 2);
 
-  const order = createOrder({ cart, products: [food], paymentMethod: 'qr' });
+  const order = createOrder({ cart, products: [food], paymentMethod: 'qr', serviceLocation: { type: 'takeaway' } });
   assert.equal(order.items[0].note, 'ไม่ใส่ถั่วฝักยาว');
   assert.equal(order.items[0].addOns[1].name, 'เพิ่มไข่ดาว');
 });

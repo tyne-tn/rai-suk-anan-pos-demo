@@ -38,6 +38,23 @@ export function supportsSpiceLevel(product) {
 
 const PAYMENT_METHODS = new Set(['cash', 'qr']);
 
+export const DEFAULT_SERVICE_ZONES = ['A', 'B', 'C', 'D', 'โต๊ะเสริม'].map((name) => ({
+  id: name === 'โต๊ะเสริม' ? 'extra' : name,
+  name,
+  tables: Array.from({ length: 10 }, (_, index) => index + 1),
+}));
+
+function normalizeServiceLocation(value) {
+  if (!value) throw new Error('กรุณาเลือกโซนและโต๊ะ');
+  if (value.type === 'takeaway') return { type: 'takeaway', label: 'กลับบ้าน' };
+  const zone = DEFAULT_SERVICE_ZONES.find((entry) => entry.name === value.zone);
+  const table = Number(value.table);
+  if (value.type !== 'table' || !zone || !zone.tables.includes(table)) {
+    throw new Error('โซนหรือโต๊ะไม่ถูกต้อง');
+  }
+  return { type: 'table', zone: zone.name, table, label: `โซน ${zone.name} · โต๊ะ ${table}` };
+}
+
 function assertFinitePositive(value, message) {
   if (!Number.isFinite(value) || value <= 0) throw new Error(message);
 }
@@ -109,6 +126,7 @@ export function createOrder({
   amountReceived = 0,
   now = new Date(),
   sequence = 1,
+  serviceLocation,
 }) {
   if (!PAYMENT_METHODS.has(paymentMethod)) throw new Error('วิธีชำระเงินไม่ถูกต้อง');
   if (!Number.isInteger(sequence) || sequence < 1) throw new Error('ลำดับออเดอร์ไม่ถูกต้อง');
@@ -122,6 +140,7 @@ export function createOrder({
   }
 
   const isoDate = now.toISOString();
+  const location = normalizeServiceLocation(serviceLocation);
   return {
     id: `${now.getTime()}-${sequence}`,
     orderNumber: `RS-${bangkokDateParts(now)}-${String(sequence).padStart(3, '0')}`,
@@ -134,6 +153,7 @@ export function createOrder({
     amountReceived: received,
     change: received - totals.total,
     status: 'completed',
+    serviceLocation: location,
   };
 }
 

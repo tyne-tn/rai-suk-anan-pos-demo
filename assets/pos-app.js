@@ -1,9 +1,10 @@
-import { DEFAULT_PRODUCTS, SPICE_LEVELS, calculateCart, createOrder, groupCatalogProducts, summarizeOrders, supportsSpiceLevel } from './pos-core.js';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createOrder, groupCatalogProducts, summarizeOrders, supportsSpiceLevel } from './pos-core.js?v=zones-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
   orders: 'rai-pos-orders-v2',
   cart: 'rai-pos-cart-v2',
+  serviceLocation: 'rai-pos-service-location-v1',
 };
 
 const productMetadata = new Map(DEFAULT_PRODUCTS.map((product) => [product.id, product]));
@@ -12,6 +13,7 @@ const state = {
   products: load(STORAGE_KEYS.products, DEFAULT_PRODUCTS).map((product) => ({ ...productMetadata.get(product.id), ...product })),
   orders: load(STORAGE_KEYS.orders, []),
   cart: load(STORAGE_KEYS.cart, []),
+  serviceLocation: loadObject(STORAGE_KEYS.serviceLocation),
   category: 'ทั้งหมด',
   query: '',
 };
@@ -23,6 +25,7 @@ const FOOD_ADD_ONS = [
 ];
 
 let itemDraft = null;
+let locationDraft = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -37,6 +40,15 @@ function load(key, fallback) {
     return Array.isArray(parsed) ? parsed : structuredClone(fallback);
   } catch {
     return structuredClone(fallback);
+  }
+}
+
+function loadObject(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
   }
 }
 
@@ -134,6 +146,56 @@ function showToast(message) {
   toast.classList.add('is-visible');
   clearTimeout(showToast.timeout);
   showToast.timeout = setTimeout(() => toast.classList.remove('is-visible'), 2200);
+}
+
+function saveServiceLocation(location) {
+  state.serviceLocation = location;
+  if (location) localStorage.setItem(STORAGE_KEYS.serviceLocation, JSON.stringify(location));
+  else localStorage.removeItem(STORAGE_KEYS.serviceLocation);
+  renderLocationLabel();
+}
+
+function renderLocationLabel() {
+  const label = state.serviceLocation?.label || 'ยังไม่เลือกโต๊ะ';
+  $('#order-location-label').textContent = label;
+  $('#choose-location strong').textContent = state.serviceLocation ? 'เปลี่ยนโซน / โต๊ะ' : 'เลือกโซน / โต๊ะ';
+  $('#choose-location').classList.toggle('is-selected', Boolean(state.serviceLocation));
+}
+
+function renderLocationOptions() {
+  const selectedZone = locationDraft?.zone || '';
+  const selectedTable = Number(locationDraft?.table || 0);
+  $('#zone-options').innerHTML = DEFAULT_SERVICE_ZONES.map((zone) => `<button type="button" class="location-choice ${zone.name === selectedZone ? 'is-selected' : ''}" data-zone="${escapeHtml(zone.name)}">${escapeHtml(zone.name === 'โต๊ะเสริม' ? zone.name : `โซน ${zone.name}`)}</button>`).join('');
+  const zone = DEFAULT_SERVICE_ZONES.find((entry) => entry.name === selectedZone);
+  $('#table-options').innerHTML = zone ? zone.tables.map((table) => `<button type="button" class="table-choice ${table === selectedTable ? 'is-selected' : ''}" data-table="${table}"><span>โต๊ะ</span><strong>${table}</strong></button>`).join('') : '<p class="location-hint">เลือกโซนก่อน แล้วจึงเลือกโต๊ะ</p>';
+}
+
+function openLocationDialog() {
+  locationDraft = state.serviceLocation?.type === 'table'
+    ? { ...state.serviceLocation }
+    : { type: 'table', zone: 'A', table: null };
+  $('#location-error').textContent = '';
+  renderLocationOptions();
+  $('#location-dialog').showModal();
+}
+
+function confirmLocation(event) {
+  event.preventDefault();
+  if (!locationDraft?.zone || !locationDraft?.table) {
+    $('#location-error').textContent = 'กรุณาเลือกโซนและโต๊ะ';
+    return;
+  }
+  const location = { type: 'table', zone: locationDraft.zone, table: Number(locationDraft.table) };
+  location.label = `โซน ${location.zone} · โต๊ะ ${location.table}`;
+  saveServiceLocation(location);
+  $('#location-dialog').close();
+  showToast(`เลือก ${location.label} แล้ว`);
+}
+
+function selectTakeaway() {
+  saveServiceLocation({ type: 'takeaway', label: 'กลับบ้าน' });
+  $('#location-dialog').close();
+  showToast('เลือกออเดอร์กลับบ้านแล้ว');
 }
 
 function renderCategories() {
@@ -270,6 +332,11 @@ function updatePayment() {
 function openCheckout() {
   const totals = cartTotals();
   if (!totals.itemCount) return;
+  if (!state.serviceLocation) {
+    openLocationDialog();
+    showToast('เลือกโซนและโต๊ะก่อนชำระเงิน');
+    return;
+  }
   $('#payment-total').textContent = money.format(totals.total);
   $('#payment-error').textContent = '';
   $('#cash-received').value = '';
@@ -292,11 +359,13 @@ function completePayment(event) {
       paymentMethod: method,
       amountReceived: Number($('#cash-received').value || 0),
       sequence,
+      serviceLocation: state.serviceLocation,
     });
     state.orders.unshift(order);
     state.cart = [];
     save(STORAGE_KEYS.orders, state.orders);
     save(STORAGE_KEYS.cart, state.cart);
+    saveServiceLocation(null);
     $('#payment-dialog').close();
     renderCart();
     renderOrders();
@@ -316,7 +385,7 @@ function filteredOrders(inputId) {
 function renderOrders() {
   const orders = filteredOrders('#orders-date');
   const rows = orders.map((order) => `<div class="table-row">
-    <span class="order-id"><strong>${escapeHtml(order.orderNumber)}</strong><small>${dateTime.format(new Date(order.createdAt))}</small></span>
+    <span class="order-id"><strong>${escapeHtml(order.orderNumber)}</strong><small>${escapeHtml(order.serviceLocation?.label || 'ไม่ระบุโต๊ะ')} · ${dateTime.format(new Date(order.createdAt))}</small></span>
     <span>${order.itemCount} ชิ้น</span><strong>${money.format(order.total)}</strong>
     <span><span class="status-pill ${order.status === 'void' ? 'void' : ''}">${order.status === 'void' ? 'ยกเลิก' : 'สำเร็จ'}</span></span>
     <span class="row-actions"><button data-receipt="${escapeHtml(order.id)}">ใบเสร็จ</button>${order.status === 'completed' ? `<button class="danger" data-void="${escapeHtml(order.id)}">ยกเลิก</button>` : ''}</span>
@@ -407,7 +476,7 @@ function toggleProduct(productId) {
 
 function showReceipt(order) {
   const method = order.paymentMethod === 'cash' ? 'เงินสด' : 'สแกน QR';
-  $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}${item.spiceLevel ? `<small class="receipt-spice">${escapeHtml(item.spiceLevel)}</small>` : ''}${item.addOns?.length ? `<small class="receipt-spice">${escapeHtml(item.addOns.map((addOn) => `${addOn.name} +${money.format(addOn.price)}`).join(' · '))}</small>` : ''}${item.note ? `<small class="receipt-spice">หมายเหตุ: ${escapeHtml(item.note)}</small>` : ''}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div><div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
+  $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span><span>โซน / โต๊ะ</span><span>${escapeHtml(order.serviceLocation?.label || 'ไม่ระบุโต๊ะ')}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}${item.spiceLevel ? `<small class="receipt-spice">${escapeHtml(item.spiceLevel)}</small>` : ''}${item.addOns?.length ? `<small class="receipt-spice">${escapeHtml(item.addOns.map((addOn) => `${addOn.name} +${money.format(addOn.price)}`).join(' · '))}</small>` : ''}${item.note ? `<small class="receipt-spice">หมายเหตุ: ${escapeHtml(item.note)}</small>` : ''}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div><div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
   $('#receipt-dialog').showModal();
 }
 
@@ -457,7 +526,13 @@ $('#item-form').addEventListener('click', (event) => {
   if (event.target.closest('#item-quantity-plus')) itemDraft.quantity += 1;
   if (variant || spice || addOn || event.target.closest('#item-quantity-minus, #item-quantity-plus')) renderItemForm();
 });
-$('#clear-cart').addEventListener('click', () => { if (!state.cart.length || window.confirm('ล้างสินค้าทั้งหมดในออเดอร์?')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); renderCart(); } });
+$('#clear-cart').addEventListener('click', () => { if ((!state.cart.length && !state.serviceLocation) || window.confirm('ล้างออเดอร์ปัจจุบัน?')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); saveServiceLocation(null); renderCart(); } });
+$('#choose-location').addEventListener('click', openLocationDialog);
+$('#location-form').addEventListener('submit', confirmLocation);
+$('#cancel-location').addEventListener('click', () => $('#location-dialog').close('cancel'));
+$('#select-takeaway').addEventListener('click', selectTakeaway);
+$('#zone-options').addEventListener('click', (event) => { const button = event.target.closest('[data-zone]'); if (button) { locationDraft = { type: 'table', zone: button.dataset.zone, table: null }; renderLocationOptions(); } });
+$('#table-options').addEventListener('click', (event) => { const button = event.target.closest('[data-table]'); if (button) { locationDraft.table = Number(button.dataset.table); renderLocationOptions(); } });
 $('#checkout-button').addEventListener('click', openCheckout);
 $('#payment-form').addEventListener('submit', completePayment);
 $('#payment-form').addEventListener('change', updatePayment);
@@ -500,6 +575,7 @@ function tickClock() {
 
 $('#orders-date').value = todayKey();
 $('#report-date').value = todayKey();
+renderLocationLabel();
 renderCategories();
 renderProducts();
 renderCart();
