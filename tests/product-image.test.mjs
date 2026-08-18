@@ -16,7 +16,7 @@ test('product editor exposes a mobile-friendly image upload', () => {
 test('uploaded images are validated, compressed and used in product views', () => {
   assert.match(app, /file\.size > 8 \* 1024 \* 1024/);
   assert.match(app, /toDataURL\('image\/webp', 0\.76\)/);
-  assert.match(app, /productVisual\(product, 'product-photo'/);
+  assert.match(app, /productVisual\(representative, 'product-photo'/);
   assert.match(app, /productVisual\(product, 'line-photo'/);
   assert.match(app, /productVisual\(product, 'admin-photo'/);
 });

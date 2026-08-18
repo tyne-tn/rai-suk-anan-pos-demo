@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_PRODUCTS } from '../assets/pos-core.js';
+import { DEFAULT_PRODUCTS, groupCatalogProducts } from '../assets/pos-core.js';
 
 test('Loyverse catalog contains only fixed-price sellable items', () => {
   assert.equal(DEFAULT_PRODUCTS.length, 103);
@@ -22,4 +22,13 @@ test('variable-price Loyverse items are not published as zero-price products', (
   assert.ok(!names.has('อุปกรณ์'));
   assert.ok(!names.has('เปิดเครื่องดื่ม อื่นๆ'));
   assert.ok(!names.has('เมนูพิเศษชุดละ'));
+});
+
+test('catalog groups Loyverse variants into one menu card', () => {
+  const groups = groupCatalogProducts(DEFAULT_PRODUCTS);
+  const rice = groups.find((group) => group.displayName === 'A01 ข้าวกระเพราหมูสับ');
+  assert.ok(rice);
+  assert.deepEqual(rice.products.map((product) => product.optionName).sort(), ['ธรรมดา', 'ไข่ดาว']);
+  assert.equal(rice.minPrice, 65);
+  assert.equal(rice.maxPrice, 80);
 });

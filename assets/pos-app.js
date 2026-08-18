@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, SPICE_LEVELS, calculateCart, createOrder, summarizeOrders, supportsSpiceLevel } from './pos-core.js';
+import { DEFAULT_PRODUCTS, SPICE_LEVELS, calculateCart, createOrder, groupCatalogProducts, summarizeOrders, supportsSpiceLevel } from './pos-core.js';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
@@ -6,13 +6,23 @@ const STORAGE_KEYS = {
   cart: 'rai-pos-cart-v2',
 };
 
+const productMetadata = new Map(DEFAULT_PRODUCTS.map((product) => [product.id, product]));
+
 const state = {
-  products: load(STORAGE_KEYS.products, DEFAULT_PRODUCTS),
+  products: load(STORAGE_KEYS.products, DEFAULT_PRODUCTS).map((product) => ({ ...productMetadata.get(product.id), ...product })),
   orders: load(STORAGE_KEYS.orders, []),
   cart: load(STORAGE_KEYS.cart, []),
   category: 'ทั้งหมด',
   query: '',
 };
+
+const FOOD_ADD_ONS = [
+  { id: 'extra-rice', name: 'เพิ่มข้าว', price: 10 },
+  { id: 'fried-egg', name: 'เพิ่มไข่ดาว', price: 20 },
+  { id: 'omelet', name: 'เพิ่มไข่เจียว', price: 20 },
+];
+
+let itemDraft = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -137,50 +147,89 @@ function renderCategories() {
 
 function renderProducts() {
   const query = state.query.trim().toLocaleLowerCase('th');
-  const products = state.products.filter((product) => product.active)
+  const filtered = state.products.filter((product) => product.active)
     .filter((product) => state.category === 'ทั้งหมด' || product.category === state.category)
-    .filter((product) => !query || `${product.name} ${product.category}`.toLocaleLowerCase('th').includes(query));
+    .filter((product) => !query || `${product.name} ${product.displayName || ''} ${product.category}`.toLocaleLowerCase('th').includes(query));
+  const groups = groupCatalogProducts(filtered);
 
-  $('#product-grid').innerHTML = products.map((product) => `
-    <button class="product-card" data-add-product="${escapeHtml(product.id)}">
-      ${productVisual(product, 'product-photo', 'product-emoji')}
-      <span class="product-category">${escapeHtml(product.category)}</span>
-      <strong>${escapeHtml(product.name)}</strong>
-      <span class="product-price">${money.format(product.price)}</span>
+  $('#product-grid').innerHTML = groups.map((group) => {
+    const representative = { ...group.products[0], image: group.image, emoji: group.emoji };
+    const price = group.minPrice === group.maxPrice ? money.format(group.minPrice) : `${money.format(group.minPrice)}–${money.format(group.maxPrice)}`;
+    return `<button class="product-card" data-product-group="${escapeHtml(group.groupId)}">
+      ${productVisual(representative, 'product-photo', 'product-emoji')}
+      <span class="product-category">${escapeHtml(group.category)}</span>
+      <strong>${escapeHtml(group.displayName)}</strong>
+      <span class="product-price">${price}</span>
       <span class="add-badge">＋</span>
-    </button>
-  `).join('');
-  $('#product-empty').hidden = products.length > 0;
+    </button>`;
+  }).join('');
+  $('#product-empty').hidden = groups.length > 0;
 }
 
-function addToCart(productId) {
-  const existing = state.cart.find((item) => item.productId === productId);
-  if (existing) existing.quantity += 1;
-  else {
-    const product = state.products.find((item) => item.id === productId);
-    state.cart.push({
-      productId,
-      quantity: 1,
-      ...(supportsSpiceLevel(product) ? { spiceLevel: 'เผ็ดกลาง' } : {}),
-    });
-  }
+function selectedDraftProduct() {
+  return state.products.find((product) => product.id === itemDraft?.productId);
+}
+
+function renderItemForm() {
+  const product = selectedDraftProduct();
+  if (!product) return;
+  const variants = state.products.filter((item) => item.active && (item.groupId || item.id) === itemDraft.groupId);
+  $('#variant-section').hidden = variants.length < 2;
+  $('#variant-options').innerHTML = variants.map((item) => `<button type="button" class="choice-button ${item.id === itemDraft.productId ? 'is-selected' : ''}" data-variant="${escapeHtml(item.id)}"><span>${escapeHtml(item.optionName || item.name)}</span><strong>${money.format(item.price)}</strong></button>`).join('');
+  const food = supportsSpiceLevel(product);
+  $('#spice-section').hidden = !food;
+  $('#addon-section').hidden = !food;
+  $('#item-spice-options').innerHTML = SPICE_LEVELS.map((level) => `<button type="button" class="choice-button ${level === itemDraft.spiceLevel ? 'is-selected' : ''}" data-item-spice="${escapeHtml(level)}">${escapeHtml(level)}</button>`).join('');
+  $('#addon-options').innerHTML = FOOD_ADD_ONS.map((addOn) => `<button type="button" class="choice-button ${itemDraft.addOnIds.includes(addOn.id) ? 'is-selected' : ''}" data-addon="${escapeHtml(addOn.id)}"><span>${escapeHtml(addOn.name)}</span><strong>+${money.format(addOn.price)}</strong></button>`).join('');
+  $('#item-quantity').textContent = itemDraft.quantity;
+  const extras = FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)).reduce((sum, addOn) => sum + addOn.price, 0);
+  $('#item-total').textContent = money.format((product.price + extras) * itemDraft.quantity);
+}
+
+function openItemForm(groupId) {
+  const variants = state.products.filter((product) => product.active && (product.groupId || product.id) === groupId);
+  if (!variants.length) return;
+  const product = variants[0];
+  itemDraft = { groupId, productId: product.id, quantity: 1, spiceLevel: 'เผ็ดกลาง', addOnIds: [] };
+  $('#item-title').textContent = product.displayName || product.name;
+  $('#item-note').value = '';
+  $('#item-error').textContent = '';
+  renderItemForm();
+  $('#item-dialog').showModal();
+}
+
+function confirmItem(event) {
+  event.preventDefault();
+  const product = selectedDraftProduct();
+  if (!product) return;
+  const addOns = FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id));
+  state.cart.push({
+    lineId: globalThis.crypto?.randomUUID?.() || `line-${Date.now()}`,
+    productId: product.id,
+    quantity: itemDraft.quantity,
+    addOns,
+    note: $('#item-note').value.trim(),
+    ...(supportsSpiceLevel(product) ? { spiceLevel: itemDraft.spiceLevel } : {}),
+  });
   save(STORAGE_KEYS.cart, state.cart);
+  $('#item-dialog').close();
   renderCart();
+  showToast('เพิ่มลงออเดอร์แล้ว');
 }
 
-function changeSpiceLevel(productId, spiceLevel) {
-  const item = state.cart.find((entry) => entry.productId === productId);
+function changeSpiceLevel(lineId, spiceLevel) {
+  const item = state.cart.find((entry) => (entry.lineId || entry.productId) === lineId);
   if (!item || !SPICE_LEVELS.includes(spiceLevel)) return;
   item.spiceLevel = spiceLevel;
   save(STORAGE_KEYS.cart, state.cart);
   renderCart();
 }
 
-function changeQuantity(productId, delta) {
-  const item = state.cart.find((entry) => entry.productId === productId);
+function changeQuantity(lineId, delta) {
+  const item = state.cart.find((entry) => (entry.lineId || entry.productId) === lineId);
   if (!item) return;
   item.quantity += delta;
-  if (item.quantity <= 0) state.cart = state.cart.filter((entry) => entry.productId !== productId);
+  if (item.quantity <= 0) state.cart = state.cart.filter((entry) => (entry.lineId || entry.productId) !== lineId);
   save(STORAGE_KEYS.cart, state.cart);
   renderCart();
 }
@@ -190,10 +239,15 @@ function renderCart() {
   const productMap = new Map(state.products.map((product) => [product.id, product]));
   $('#cart-items').innerHTML = totals.items.map((item) => {
     const product = productMap.get(item.productId);
-    const spiceSelector = item.spiceLevel ? `<label class="spice-picker">ระดับความเผ็ด <select data-spice-product="${escapeHtml(item.productId)}" aria-label="ระดับความเผ็ดของ ${escapeHtml(item.name)}">${SPICE_LEVELS.map((level) => `<option value="${escapeHtml(level)}"${level === item.spiceLevel ? ' selected' : ''}>${escapeHtml(level)}</option>`).join('')}</select></label>` : '';
+    const lineId = item.lineId || item.productId;
+    const spiceSelector = item.spiceLevel ? `<label class="spice-picker">ระดับความเผ็ด <select data-spice-line="${escapeHtml(lineId)}" aria-label="ระดับความเผ็ดของ ${escapeHtml(item.name)}">${SPICE_LEVELS.map((level) => `<option value="${escapeHtml(level)}"${level === item.spiceLevel ? ' selected' : ''}>${escapeHtml(level)}</option>`).join('')}</select></label>` : '';
+    const details = [
+      ...item.addOns.map((addOn) => `${addOn.name} +${money.format(addOn.price)}`),
+      ...(item.note ? [`หมายเหตุ: ${item.note}`] : []),
+    ];
     return `<div class="cart-line">
-      <div class="cart-line-main">${productVisual(product, 'line-photo', 'line-emoji')}<span class="cart-line-name"><strong>${escapeHtml(item.name)}</strong><small>${money.format(item.unitPrice)} / ชิ้น</small>${spiceSelector}</span></div>
-      <div class="cart-line-side"><strong class="line-total">${money.format(item.lineTotal)}</strong><div class="quantity-stepper"><button data-quantity="-1" data-product="${escapeHtml(item.productId)}" aria-label="ลดจำนวน">−</button><span>${item.quantity}</span><button data-quantity="1" data-product="${escapeHtml(item.productId)}" aria-label="เพิ่มจำนวน">＋</button></div></div>
+      <div class="cart-line-main">${productVisual(product, 'line-photo', 'line-emoji')}<span class="cart-line-name"><strong>${escapeHtml(item.name)}</strong><small>${money.format(item.unitPrice)} / ชิ้น</small>${details.length ? `<small class="line-options">${escapeHtml(details.join(' · '))}</small>` : ''}${spiceSelector}</span></div>
+      <div class="cart-line-side"><strong class="line-total">${money.format(item.lineTotal)}</strong><div class="quantity-stepper"><button data-quantity="-1" data-line="${escapeHtml(lineId)}" aria-label="ลดจำนวน">−</button><span>${item.quantity}</span><button data-quantity="1" data-line="${escapeHtml(lineId)}" aria-label="เพิ่มจำนวน">＋</button></div></div>
     </div>`;
   }).join('');
   $('#cart-empty').hidden = totals.itemCount > 0;
@@ -353,7 +407,7 @@ function toggleProduct(productId) {
 
 function showReceipt(order) {
   const method = order.paymentMethod === 'cash' ? 'เงินสด' : 'สแกน QR';
-  $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}${item.spiceLevel ? `<small class="receipt-spice">${escapeHtml(item.spiceLevel)}</small>` : ''}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div><div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
+  $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}${item.spiceLevel ? `<small class="receipt-spice">${escapeHtml(item.spiceLevel)}</small>` : ''}${item.addOns?.length ? `<small class="receipt-spice">${escapeHtml(item.addOns.map((addOn) => `${addOn.name} +${money.format(addOn.price)}`).join(' · '))}</small>` : ''}${item.note ? `<small class="receipt-spice">หมายเหตุ: ${escapeHtml(item.note)}</small>` : ''}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div><div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
   $('#receipt-dialog').showModal();
 }
 
@@ -387,9 +441,22 @@ function exportData() {
 $$('[data-view]').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.view)));
 $('#product-search').addEventListener('input', (event) => { state.query = event.target.value; renderProducts(); });
 $('#category-tabs').addEventListener('click', (event) => { const button = event.target.closest('[data-category]'); if (!button) return; state.category = button.dataset.category; renderCategories(); renderProducts(); });
-$('#product-grid').addEventListener('click', (event) => { const button = event.target.closest('[data-add-product]'); if (button) addToCart(button.dataset.addProduct); });
-$('#cart-items').addEventListener('click', (event) => { const button = event.target.closest('[data-quantity]'); if (button) changeQuantity(button.dataset.product, Number(button.dataset.quantity)); });
-$('#cart-items').addEventListener('change', (event) => { const select = event.target.closest('[data-spice-product]'); if (select) changeSpiceLevel(select.dataset.spiceProduct, select.value); });
+$('#product-grid').addEventListener('click', (event) => { const button = event.target.closest('[data-product-group]'); if (button) openItemForm(button.dataset.productGroup); });
+$('#cart-items').addEventListener('click', (event) => { const button = event.target.closest('[data-quantity]'); if (button) changeQuantity(button.dataset.line, Number(button.dataset.quantity)); });
+$('#cart-items').addEventListener('change', (event) => { const select = event.target.closest('[data-spice-line]'); if (select) changeSpiceLevel(select.dataset.spiceLine, select.value); });
+$('#item-form').addEventListener('submit', confirmItem);
+$('#item-form').addEventListener('click', (event) => {
+  if (!itemDraft) return;
+  const variant = event.target.closest('[data-variant]');
+  const spice = event.target.closest('[data-item-spice]');
+  const addOn = event.target.closest('[data-addon]');
+  if (variant) itemDraft.productId = variant.dataset.variant;
+  if (spice) itemDraft.spiceLevel = spice.dataset.itemSpice;
+  if (addOn) itemDraft.addOnIds = itemDraft.addOnIds.includes(addOn.dataset.addon) ? itemDraft.addOnIds.filter((id) => id !== addOn.dataset.addon) : [...itemDraft.addOnIds, addOn.dataset.addon];
+  if (event.target.closest('#item-quantity-minus')) itemDraft.quantity = Math.max(1, itemDraft.quantity - 1);
+  if (event.target.closest('#item-quantity-plus')) itemDraft.quantity += 1;
+  if (variant || spice || addOn || event.target.closest('#item-quantity-minus, #item-quantity-plus')) renderItemForm();
+});
 $('#clear-cart').addEventListener('click', () => { if (!state.cart.length || window.confirm('ล้างสินค้าทั้งหมดในออเดอร์?')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); renderCart(); } });
 $('#checkout-button').addEventListener('click', openCheckout);
 $('#payment-form').addEventListener('submit', completePayment);

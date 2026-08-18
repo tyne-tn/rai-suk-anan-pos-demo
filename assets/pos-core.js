@@ -2,6 +2,29 @@ import { LOYVERSE_PRODUCTS } from './pos-products.js';
 
 export const DEFAULT_PRODUCTS = LOYVERSE_PRODUCTS;
 
+export function groupCatalogProducts(products) {
+  const groups = new Map();
+  products.forEach((product) => {
+    const groupId = product.groupId || product.id;
+    const current = groups.get(groupId) || {
+      groupId,
+      displayName: product.displayName || product.name,
+      category: product.category,
+      emoji: product.emoji,
+      image: product.image || '',
+      products: [],
+      minPrice: product.price,
+      maxPrice: product.price,
+    };
+    current.products.push(product);
+    current.minPrice = Math.min(current.minPrice, product.price);
+    current.maxPrice = Math.max(current.maxPrice, product.price);
+    if (!current.image && product.image) current.image = product.image;
+    groups.set(groupId, current);
+  });
+  return [...groups.values()];
+}
+
 const NON_SPICY_CATEGORIES = new Set([
   '(05) กางเต้น & อุปกรณ์เล่นน้ํา',
   '(09) เครื่องดื่ม',
@@ -19,6 +42,17 @@ function assertFinitePositive(value, message) {
   if (!Number.isFinite(value) || value <= 0) throw new Error(message);
 }
 
+function normalizeAddOns(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((addOn) => {
+    const price = Number(addOn?.price);
+    if (!addOn?.id || !addOn?.name || !Number.isFinite(price) || price <= 0) {
+      throw new Error('ราคาของเพิ่มไม่ถูกต้อง');
+    }
+    return { id: String(addOn.id), name: String(addOn.name), price };
+  });
+}
+
 export function calculateCart(cart, products) {
   const productMap = new Map(products.map((product) => [product.id, product]));
   let subtotal = 0;
@@ -32,19 +66,24 @@ export function calculateCart(cart, products) {
 
     const quantity = Math.floor(entry.quantity);
     if (quantity !== entry.quantity) throw new Error('จำนวนสินค้าต้องเป็นจำนวนเต็ม');
-    const lineTotal = product.price * quantity;
+    const addOns = normalizeAddOns(entry.addOns);
+    const addOnTotal = addOns.reduce((total, addOn) => total + addOn.price, 0);
+    const unitPrice = product.price + addOnTotal;
+    const lineTotal = unitPrice * quantity;
     const spiceLevel = supportsSpiceLevel(product) ? entry.spiceLevel || 'เผ็ดกลาง' : undefined;
-    if (spiceLevel && !SPICE_LEVELS.includes(spiceLevel)) {
-      throw new Error('ระดับความเผ็ดไม่ถูกต้อง');
-    }
+    if (spiceLevel && !SPICE_LEVELS.includes(spiceLevel)) throw new Error('ระดับความเผ็ดไม่ถูกต้อง');
     subtotal += lineTotal;
     itemCount += quantity;
     return {
+      lineId: entry.lineId || product.id,
       productId: product.id,
       name: product.name,
-      unitPrice: product.price,
+      basePrice: product.price,
+      unitPrice,
       quantity,
       lineTotal,
+      addOns,
+      note: String(entry.note || '').trim().slice(0, 120),
       ...(spiceLevel ? { spiceLevel } : {}),
     };
   });

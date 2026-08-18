@@ -132,6 +132,20 @@
     </form>
   </dialog>
 
+  <dialog id="item-dialog" class="modal item-modal">
+    <form method="dialog" class="modal-card item-modal-card" id="item-form">
+      <div class="modal-head"><div><p class="eyebrow">CUSTOMIZE</p><h2 id="item-title">เลือกตัวเลือก</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
+      <input type="hidden" id="item-group-id">
+      <section class="item-option-section" id="variant-section"><h3>ตัวเลือก</h3><div class="choice-grid" id="variant-options"></div></section>
+      <section class="item-option-section" id="spice-section"><h3>ระดับความเผ็ด</h3><div class="choice-grid compact" id="item-spice-options"></div></section>
+      <section class="item-option-section" id="addon-section"><h3>ของเพิ่ม</h3><div class="choice-grid" id="addon-options"></div></section>
+      <section class="item-option-section"><h3>จำนวน</h3><div class="item-quantity"><button type="button" id="item-quantity-minus" aria-label="ลดจำนวน">−</button><strong id="item-quantity">1</strong><button type="button" id="item-quantity-plus" aria-label="เพิ่มจำนวน">＋</button></div></section>
+      <label class="item-note">หมายเหตุ<textarea id="item-note" maxlength="120" rows="2" placeholder="เช่น ไม่ใส่ผัก แยกน้ำ"></textarea></label>
+      <p class="form-error" id="item-error" role="alert"></p>
+      <button class="checkout-button item-add-button" id="confirm-item" value="default"><span>เพิ่มลงออเดอร์</span><strong id="item-total">฿0</strong></button>
+    </form>
+  </dialog>
+
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="assets/pos-app.js"></script>
