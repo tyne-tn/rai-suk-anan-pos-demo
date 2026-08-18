@@ -2,6 +2,17 @@ import { LOYVERSE_PRODUCTS } from './pos-products.js';
 
 export const DEFAULT_PRODUCTS = LOYVERSE_PRODUCTS;
 
+const NON_SPICY_CATEGORIES = new Set([
+  '(05) กางเต้น & อุปกรณ์เล่นน้ํา',
+  '(09) เครื่องดื่ม',
+]);
+
+export const SPICE_LEVELS = ['ไม่เผ็ด', 'เผ็ดน้อย', 'เผ็ดกลาง', 'เผ็ดมาก'];
+
+export function supportsSpiceLevel(product) {
+  return Boolean(product?.category) && !NON_SPICY_CATEGORIES.has(product.category);
+}
+
 const PAYMENT_METHODS = new Set(['cash', 'qr']);
 
 function assertFinitePositive(value, message) {
@@ -22,6 +33,10 @@ export function calculateCart(cart, products) {
     const quantity = Math.floor(entry.quantity);
     if (quantity !== entry.quantity) throw new Error('จำนวนสินค้าต้องเป็นจำนวนเต็ม');
     const lineTotal = product.price * quantity;
+    const spiceLevel = supportsSpiceLevel(product) ? entry.spiceLevel || 'เผ็ดกลาง' : undefined;
+    if (spiceLevel && !SPICE_LEVELS.includes(spiceLevel)) {
+      throw new Error('ระดับความเผ็ดไม่ถูกต้อง');
+    }
     subtotal += lineTotal;
     itemCount += quantity;
     return {
@@ -30,6 +45,7 @@ export function calculateCart(cart, products) {
       unitPrice: product.price,
       quantity,
       lineTotal,
+      ...(spiceLevel ? { spiceLevel } : {}),
     };
   });
 

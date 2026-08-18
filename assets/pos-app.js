@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, calculateCart, createOrder, summarizeOrders } from './pos-core.js';
+import { DEFAULT_PRODUCTS, SPICE_LEVELS, calculateCart, createOrder, summarizeOrders, supportsSpiceLevel } from './pos-core.js';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
@@ -105,7 +105,22 @@ function renderProducts() {
 function addToCart(productId) {
   const existing = state.cart.find((item) => item.productId === productId);
   if (existing) existing.quantity += 1;
-  else state.cart.push({ productId, quantity: 1 });
+  else {
+    const product = state.products.find((item) => item.id === productId);
+    state.cart.push({
+      productId,
+      quantity: 1,
+      ...(supportsSpiceLevel(product) ? { spiceLevel: 'เผ็ดกลาง' } : {}),
+    });
+  }
+  save(STORAGE_KEYS.cart, state.cart);
+  renderCart();
+}
+
+function changeSpiceLevel(productId, spiceLevel) {
+  const item = state.cart.find((entry) => entry.productId === productId);
+  if (!item || !SPICE_LEVELS.includes(spiceLevel)) return;
+  item.spiceLevel = spiceLevel;
   save(STORAGE_KEYS.cart, state.cart);
   renderCart();
 }
@@ -124,8 +139,9 @@ function renderCart() {
   const productMap = new Map(state.products.map((product) => [product.id, product]));
   $('#cart-items').innerHTML = totals.items.map((item) => {
     const product = productMap.get(item.productId);
+    const spiceSelector = item.spiceLevel ? `<label class="spice-picker">ระดับความเผ็ด <select data-spice-product="${escapeHtml(item.productId)}" aria-label="ระดับความเผ็ดของ ${escapeHtml(item.name)}">${SPICE_LEVELS.map((level) => `<option value="${escapeHtml(level)}"${level === item.spiceLevel ? ' selected' : ''}>${escapeHtml(level)}</option>`).join('')}</select></label>` : '';
     return `<div class="cart-line">
-      <div class="cart-line-main"><span class="line-emoji">${escapeHtml(product?.emoji || '☕')}</span><span class="cart-line-name"><strong>${escapeHtml(item.name)}</strong><small>${money.format(item.unitPrice)} / ชิ้น</small></span></div>
+      <div class="cart-line-main"><span class="line-emoji">${escapeHtml(product?.emoji || '☕')}</span><span class="cart-line-name"><strong>${escapeHtml(item.name)}</strong><small>${money.format(item.unitPrice)} / ชิ้น</small>${spiceSelector}</span></div>
       <div class="cart-line-side"><strong class="line-total">${money.format(item.lineTotal)}</strong><div class="quantity-stepper"><button data-quantity="-1" data-product="${escapeHtml(item.productId)}" aria-label="ลดจำนวน">−</button><span>${item.quantity}</span><button data-quantity="1" data-product="${escapeHtml(item.productId)}" aria-label="เพิ่มจำนวน">＋</button></div></div>
     </div>`;
   }).join('');
@@ -284,7 +300,7 @@ function toggleProduct(productId) {
 
 function showReceipt(order) {
   const method = order.paymentMethod === 'cash' ? 'เงินสด' : 'สแกน QR';
-  $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div><div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
+  $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}${item.spiceLevel ? `<small class="receipt-spice">${escapeHtml(item.spiceLevel)}</small>` : ''}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div><div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
   $('#receipt-dialog').showModal();
 }
 
@@ -320,6 +336,7 @@ $('#product-search').addEventListener('input', (event) => { state.query = event.
 $('#category-tabs').addEventListener('click', (event) => { const button = event.target.closest('[data-category]'); if (!button) return; state.category = button.dataset.category; renderCategories(); renderProducts(); });
 $('#product-grid').addEventListener('click', (event) => { const button = event.target.closest('[data-add-product]'); if (button) addToCart(button.dataset.addProduct); });
 $('#cart-items').addEventListener('click', (event) => { const button = event.target.closest('[data-quantity]'); if (button) changeQuantity(button.dataset.product, Number(button.dataset.quantity)); });
+$('#cart-items').addEventListener('change', (event) => { const select = event.target.closest('[data-spice-product]'); if (select) changeSpiceLevel(select.dataset.spiceProduct, select.value); });
 $('#clear-cart').addEventListener('click', () => { if (!state.cart.length || window.confirm('ล้างสินค้าทั้งหมดในออเดอร์?')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); renderCart(); } });
 $('#checkout-button').addEventListener('click', openCheckout);
 $('#payment-form').addEventListener('submit', completePayment);
