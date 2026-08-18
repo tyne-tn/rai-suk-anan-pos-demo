@@ -1,9 +1,9 @@
 import { DEFAULT_PRODUCTS, calculateCart, createOrder, summarizeOrders } from './pos-core.js';
 
 const STORAGE_KEYS = {
-  products: 'rai-pos-products-v1',
-  orders: 'rai-pos-orders-v1',
-  cart: 'rai-pos-cart-v1',
+  products: 'rai-pos-products-v2',
+  orders: 'rai-pos-orders-v2',
+  cart: 'rai-pos-cart-v2',
 };
 
 const state = {

@@ -1,17 +1,6 @@
-export const DEFAULT_PRODUCTS = [
-  { id: 'americano', name: 'อเมริกาโน่', category: 'กาแฟ', price: 65, emoji: '☕', active: true },
-  { id: 'latte', name: 'ลาเต้', category: 'กาแฟ', price: 75, emoji: '🥛', active: true },
-  { id: 'cappuccino', name: 'คาปูชิโน่', category: 'กาแฟ', price: 75, emoji: '☕', active: true },
-  { id: 'espresso', name: 'เอสเปรสโซ่', category: 'กาแฟ', price: 60, emoji: '🫘', active: true },
-  { id: 'thai-tea', name: 'ชาไทย', category: 'ชาและนม', price: 65, emoji: '🧋', active: true },
-  { id: 'matcha', name: 'มัทฉะลาเต้', category: 'ชาและนม', price: 85, emoji: '🍵', active: true },
-  { id: 'cocoa', name: 'โกโก้', category: 'ชาและนม', price: 70, emoji: '🍫', active: true },
-  { id: 'lemon-soda', name: 'เลมอนโซดา', category: 'โซดา', price: 65, emoji: '🍋', active: true },
-  { id: 'coconut-cake', name: 'เค้กมะพร้าว', category: 'เบเกอรี่', price: 95, emoji: '🍰', active: true },
-  { id: 'croissant', name: 'ครัวซองต์', category: 'เบเกอรี่', price: 75, emoji: '🥐', active: true },
-  { id: 'brownie', name: 'บราวนี่', category: 'เบเกอรี่', price: 70, emoji: '🍫', active: true },
-  { id: 'toast', name: 'ขนมปังปิ้ง', category: 'เบเกอรี่', price: 55, emoji: '🍞', active: true },
-];
+import { LOYVERSE_PRODUCTS } from './pos-products.js';
+
+export const DEFAULT_PRODUCTS = LOYVERSE_PRODUCTS;
 
 const PAYMENT_METHODS = new Set(['cash', 'qr']);
 
