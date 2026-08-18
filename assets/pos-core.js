@@ -36,6 +36,11 @@ export function supportsSpiceLevel(product) {
   return Boolean(product?.category) && !NON_SPICY_CATEGORIES.has(product.category);
 }
 
+export function supportsAddOns(product) {
+  if (typeof product?.addOnsEnabled === 'boolean') return product.addOnsEnabled;
+  return supportsSpiceLevel(product);
+}
+
 const PAYMENT_METHODS = new Set(['cash', 'qr']);
 
 export const DEFAULT_SERVICE_ZONES = ['A', 'B', 'C', 'D', 'โต๊ะเสริม'].map((name) => ({
@@ -83,7 +88,7 @@ export function calculateCart(cart, products) {
 
     const quantity = Math.floor(entry.quantity);
     if (quantity !== entry.quantity) throw new Error('จำนวนสินค้าต้องเป็นจำนวนเต็ม');
-    const addOns = normalizeAddOns(entry.addOns);
+    const addOns = supportsAddOns(product) ? normalizeAddOns(entry.addOns) : [];
     const addOnTotal = addOns.reduce((total, addOn) => total + addOn.price, 0);
     const unitPrice = product.price + addOnTotal;
     const lineTotal = unitPrice * quantity;

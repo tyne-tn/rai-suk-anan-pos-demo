@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createOrder, groupCatalogProducts, summarizeOrders, supportsSpiceLevel } from './pos-core.js?v=zones-v1';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createOrder, groupCatalogProducts, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=addon-toggle-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
@@ -240,11 +240,13 @@ function renderItemForm() {
   $('#variant-options').innerHTML = variants.map((item) => `<button type="button" class="choice-button ${item.id === itemDraft.productId ? 'is-selected' : ''}" data-variant="${escapeHtml(item.id)}"><span>${escapeHtml(item.optionName || item.name)}</span><strong>${money.format(item.price)}</strong></button>`).join('');
   const food = supportsSpiceLevel(product);
   $('#spice-section').hidden = !food;
-  $('#addon-section').hidden = !food;
+  const addOnsEnabled = supportsAddOns(product);
+  $('#addon-section').hidden = !addOnsEnabled;
+  if (!addOnsEnabled) itemDraft.addOnIds = [];
   $('#item-spice-options').innerHTML = SPICE_LEVELS.map((level) => `<button type="button" class="choice-button ${level === itemDraft.spiceLevel ? 'is-selected' : ''}" data-item-spice="${escapeHtml(level)}">${escapeHtml(level)}</button>`).join('');
   $('#addon-options').innerHTML = FOOD_ADD_ONS.map((addOn) => `<button type="button" class="choice-button ${itemDraft.addOnIds.includes(addOn.id) ? 'is-selected' : ''}" data-addon="${escapeHtml(addOn.id)}"><span>${escapeHtml(addOn.name)}</span><strong>+${money.format(addOn.price)}</strong></button>`).join('');
   $('#item-quantity').textContent = itemDraft.quantity;
-  const extras = FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)).reduce((sum, addOn) => sum + addOn.price, 0);
+  const extras = addOnsEnabled ? FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)).reduce((sum, addOn) => sum + addOn.price, 0) : 0;
   $('#item-total').textContent = money.format((product.price + extras) * itemDraft.quantity);
 }
 
@@ -264,7 +266,7 @@ function confirmItem(event) {
   event.preventDefault();
   const product = selectedDraftProduct();
   if (!product) return;
-  const addOns = FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id));
+  const addOns = supportsAddOns(product) ? FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)) : [];
   state.cart.push({
     lineId: globalThis.crypto?.randomUUID?.() || `line-${Date.now()}`,
     productId: product.id,
@@ -430,6 +432,7 @@ function openProductForm(productId = '') {
   $('#product-price').value = product?.price || '';
   $('#product-category').value = product?.category || '';
   $('#product-emoji').value = product?.emoji || '☕';
+  $('#product-addons-enabled').checked = product ? supportsAddOns(product) : true;
   pendingProductImage = safeProductImage(product?.image);
   updateProductImagePreview(pendingProductImage);
   $('#product-form-title').textContent = product ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า';
@@ -444,16 +447,17 @@ function saveProduct(event) {
   const category = $('#product-category').value.trim();
   const price = Number($('#product-price').value);
   const emoji = $('#product-emoji').value.trim() || '☕';
+  const addOnsEnabled = $('#product-addons-enabled').checked;
   if (!name || !category || !Number.isFinite(price) || price <= 0) {
     $('#product-error').textContent = 'กรุณากรอกชื่อ หมวดหมู่ และราคาให้ถูกต้อง';
     return;
   }
   if (id) {
     const product = state.products.find((item) => item.id === id);
-    Object.assign(product, { name, category, price, emoji, image: pendingProductImage });
+    Object.assign(product, { name, category, price, emoji, image: pendingProductImage, addOnsEnabled });
   } else {
     const newId = `product-${Date.now()}`;
-    state.products.push({ id: newId, name, category, price, emoji, image: pendingProductImage, active: true });
+    state.products.push({ id: newId, name, category, price, emoji, image: pendingProductImage, addOnsEnabled, active: true });
   }
   save(STORAGE_KEYS.products, state.products);
   $('#product-dialog').close();
