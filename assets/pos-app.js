@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=held-orders-v1';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=kitchen-print-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
@@ -330,8 +330,34 @@ function renderCart() {
   $('#checkout-total').textContent = money.format(totals.total);
   $('#checkout-button').disabled = totals.itemCount === 0;
   $('#hold-order').disabled = totals.itemCount === 0;
+  $('#print-kitchen-order').disabled = totals.itemCount === 0;
   $('#hold-order-label').textContent = state.currentHeldOrderId ? 'อัปเดตบิลพัก' : 'พักบิล';
 }
+
+function printKitchenOrder({ cart = state.cart, serviceLocation = state.serviceLocation, printedAt = new Date() } = {}) {
+  const totals = calculateCart(cart, state.products);
+  if (!totals.itemCount) return;
+  if (!serviceLocation) {
+    openLocationDialog();
+    showToast('เลือกโซนและโต๊ะก่อนพิมพ์ใบครัว');
+    return;
+  }
+  const root = $('#kitchen-print-root');
+  root.innerHTML = `<article class="kitchen-ticket">
+    <header><strong>ใบออเดอร์ครัว</strong><span>ไร่สุขอนันต์</span></header>
+    <section class="kitchen-location">${escapeHtml(serviceLocation.label)}</section>
+    <div class="kitchen-meta"><span>${dateTime.format(new Date(printedAt))}</span><span>${totals.itemCount} ชิ้น</span></div>
+    <div class="kitchen-items">${totals.items.map((item) => `<div class="kitchen-item"><strong><b>${item.quantity}×</b> ${escapeHtml(item.name)}</strong>${item.spiceLevel ? `<span>${escapeHtml(item.spiceLevel)}</span>` : ''}${item.addOns?.length ? `<span>+ ${escapeHtml(item.addOns.map((addOn) => addOn.name).join(' · '))}</span>` : ''}${item.note ? `<em>หมายเหตุ: ${escapeHtml(item.note)}</em>` : ''}</div>`).join('')}</div>
+    <footer>— จบรายการ —</footer>
+  </article>`;
+  document.body.classList.add('kitchen-printing');
+  requestAnimationFrame(() => window.print());
+}
+
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('kitchen-printing');
+  $('#kitchen-print-root').replaceChildren();
+});
 
 function holdCurrentOrder() {
   const totals = cartTotals();
@@ -401,7 +427,7 @@ function renderHeldOrders() {
   $('#held-orders').innerHTML = state.heldOrders.map((order) => `<article class="held-order-card ${order.id === state.currentHeldOrderId ? 'is-active' : ''}">
     <div><strong>${escapeHtml(order.serviceLocation.label)}</strong><small>พักเมื่อ ${dateTime.format(new Date(order.updatedAt))} · ${order.itemCount} ชิ้น</small></div>
     <strong>${money.format(order.total)}</strong>
-    <div class="held-order-actions"><button type="button" data-resume-held="${escapeHtml(order.id)}">${order.id === state.currentHeldOrderId ? 'กำลังเปิด' : 'เรียกบิล'}</button><button type="button" class="danger" data-cancel-held="${escapeHtml(order.id)}">ยกเลิก</button></div>
+    <div class="held-order-actions"><button type="button" data-resume-held="${escapeHtml(order.id)}">${order.id === state.currentHeldOrderId ? 'กำลังเปิด' : 'เรียกบิล'}</button><button type="button" data-print-held="${escapeHtml(order.id)}">พิมพ์ครัว</button><button type="button" class="danger" data-cancel-held="${escapeHtml(order.id)}">ยกเลิก</button></div>
   </article>`).join('') || '<div class="held-orders-empty">ยังไม่มีบิลที่พักไว้</div>';
 }
 
@@ -570,6 +596,8 @@ function toggleProduct(productId) {
 }
 
 function showReceipt(order) {
+  document.body.classList.remove('kitchen-printing');
+  $('#kitchen-print-root').replaceChildren();
   const method = order.paymentMethod === 'cash' ? 'เงินสด' : 'สแกน QR';
   $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span><span>โซน / โต๊ะ</span><span>${escapeHtml(order.serviceLocation?.label || 'ไม่ระบุโต๊ะ')}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}${item.spiceLevel ? `<small class="receipt-spice">${escapeHtml(item.spiceLevel)}</small>` : ''}${item.addOns?.length ? `<small class="receipt-spice">${escapeHtml(item.addOns.map((addOn) => `${addOn.name} +${money.format(addOn.price)}`).join(' · '))}</small>` : ''}${item.note ? `<small class="receipt-spice">หมายเหตุ: ${escapeHtml(item.note)}</small>` : ''}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div><div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
   $('#receipt-dialog').showModal();
@@ -609,10 +637,16 @@ $('#product-grid').addEventListener('click', (event) => { const button = event.t
 $('#cart-items').addEventListener('click', (event) => { const button = event.target.closest('[data-quantity]'); if (button) changeQuantity(button.dataset.line, Number(button.dataset.quantity)); });
 $('#cart-items').addEventListener('change', (event) => { const select = event.target.closest('[data-spice-line]'); if (select) changeSpiceLevel(select.dataset.spiceLine, select.value); });
 $('#hold-order').addEventListener('click', holdCurrentOrder);
+$('#print-kitchen-order').addEventListener('click', () => printKitchenOrder());
 $('#held-orders').addEventListener('click', (event) => {
   const resume = event.target.closest('[data-resume-held]');
+  const print = event.target.closest('[data-print-held]');
   const cancel = event.target.closest('[data-cancel-held]');
   if (resume) resumeHeldOrder(resume.dataset.resumeHeld);
+  if (print) {
+    const held = state.heldOrders.find((order) => order.id === print.dataset.printHeld);
+    if (held) printKitchenOrder({ cart: held.cart, serviceLocation: held.serviceLocation, printedAt: held.updatedAt });
+  }
   if (cancel) cancelHeldOrder(cancel.dataset.cancelHeld);
 });
 $('#item-form').addEventListener('submit', confirmItem);

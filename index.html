@@ -64,6 +64,7 @@
             <div><span>จำนวนสินค้า</span><strong id="cart-count">0 รายการ</strong></div>
             <div class="grand-total"><span>ยอดสุทธิ</span><strong id="cart-total">฿0</strong></div>
             <div class="cart-checkout-actions">
+              <button type="button" class="kitchen-print-button" id="print-kitchen-order" disabled><span>พิมพ์ครัว</span><strong>▤</strong></button>
               <button type="button" class="hold-order-button" id="hold-order" disabled><span id="hold-order-label">พักบิล</span><strong>Ⅱ</strong></button>
               <button class="checkout-button" id="checkout-button" disabled><span>ชำระเงิน</span><strong id="checkout-total">฿0</strong></button>
             </div>
@@ -175,7 +176,8 @@
   </dialog>
 
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
+  <section class="kitchen-print-root" id="kitchen-print-root" aria-hidden="true"></section>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/pos-app.js?v=held-orders-v1"></script>
+  <script type="module" src="assets/pos-app.js?v=kitchen-print-v1"></script>
 </body>
 </html>
