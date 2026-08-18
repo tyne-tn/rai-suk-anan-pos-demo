@@ -113,7 +113,7 @@
 
   <dialog id="location-dialog" class="modal location-modal">
     <form method="dialog" class="modal-card" id="location-form">
-      <div class="modal-head"><div><p class="eyebrow">SERVICE AREA</p><h2>เลือกโซนและโต๊ะ</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">SERVICE AREA</p><h2>เลือกโซนและโต๊ะ</h2></div><button type="button" class="close-button" data-close-dialog="location-dialog" aria-label="ปิด">×</button></div>
       <button type="button" class="takeaway-button" id="select-takeaway"><span>🥡</span><strong>ลูกค้ารับกลับบ้าน</strong></button>
       <section class="location-section"><h3>เลือกโซน</h3><div class="zone-options" id="zone-options"></div></section>
       <section class="location-section"><h3>เลือกโต๊ะ</h3><div class="table-options" id="table-options"></div></section>
@@ -127,18 +127,21 @@
 
   <dialog id="payment-dialog" class="modal payment-modal">
     <form method="dialog" class="modal-card" id="payment-form">
-      <div class="modal-head"><div><p class="eyebrow">CHECKOUT</p><h2>รับชำระเงิน</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">CHECKOUT</p><h2>รับชำระเงิน</h2></div><button type="button" class="close-button" data-close-dialog="payment-dialog" aria-label="ปิด">×</button></div>
       <div class="amount-hero"><span>ยอดที่ต้องชำระ</span><strong id="payment-total">฿0</strong></div>
       <fieldset class="payment-methods"><legend>เลือกช่องทางชำระ</legend><label><input type="radio" name="payment" value="cash" checked><span>💵</span><strong>เงินสด</strong></label><label><input type="radio" name="payment" value="qr"><span>▦</span><strong>สแกน QR</strong></label></fieldset>
       <div class="cash-section" id="cash-section"><label>รับเงินมา<input id="cash-received" type="number" inputmode="decimal" min="0" step="1" placeholder="0"></label><div class="quick-cash" id="quick-cash"></div><div class="change-row"><span>เงินทอน</span><strong id="cash-change">฿0</strong></div></div>
       <p class="form-error" id="payment-error" role="alert"></p>
-      <button class="checkout-button confirm-payment" id="confirm-payment" value="default"><span>ยืนยันการชำระเงิน</span><strong>✓</strong></button>
+      <div class="product-form-actions payment-form-actions">
+        <button type="button" class="cancel-button" id="cancel-payment">ย้อนกลับ</button>
+        <button class="checkout-button confirm-payment" id="confirm-payment" type="submit" value="default"><span>ยืนยันการชำระเงิน</span><strong>✓</strong></button>
+      </div>
     </form>
   </dialog>
 
   <dialog id="product-dialog" class="modal">
     <form method="dialog" class="modal-card" id="product-form">
-      <div class="modal-head"><div><p class="eyebrow">PRODUCT</p><h2 id="product-form-title">เพิ่มสินค้า</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">PRODUCT</p><h2 id="product-form-title">เพิ่มสินค้า</h2></div><button type="button" class="close-button" data-close-dialog="product-dialog" aria-label="ปิด">×</button></div>
       <input type="hidden" id="product-id">
       <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคา (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>หมวดหมู่<input id="product-category" required maxlength="30" list="category-list"></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label><label class="product-image-field">รูปสินค้า<input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><span class="product-image-preview"><img id="product-image-preview" alt="ตัวอย่างรูปสินค้า" hidden><span id="product-image-placeholder">เลือกรูปหรือถ่ายภาพ</span></span><button type="button" class="text-button danger" id="remove-product-image" hidden>ลบรูป</button></label></div>
       <datalist id="category-list"></datalist>
@@ -152,7 +155,7 @@
 
   <dialog id="item-dialog" class="modal item-modal">
     <form method="dialog" class="modal-card item-modal-card" id="item-form">
-      <div class="modal-head"><div><p class="eyebrow">CUSTOMIZE</p><h2 id="item-title">เลือกตัวเลือก</h2></div><button class="close-button" value="cancel" aria-label="ปิด">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">CUSTOMIZE</p><h2 id="item-title">เลือกตัวเลือก</h2></div><button type="button" class="close-button" data-close-dialog="item-dialog" aria-label="ปิด">×</button></div>
       <input type="hidden" id="item-group-id">
       <section class="item-option-section" id="variant-section"><h3>ตัวเลือก</h3><div class="choice-grid" id="variant-options"></div></section>
       <section class="item-option-section" id="spice-section"><h3>ระดับความเผ็ด</h3><div class="choice-grid compact" id="item-spice-options"></div></section>
@@ -166,6 +169,6 @@
 
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/pos-app.js?v=zones-v1"></script>
+  <script type="module" src="assets/pos-app.js?v=payment-cancel-v1"></script>
 </body>
 </html>

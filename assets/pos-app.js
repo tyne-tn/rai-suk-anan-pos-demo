@@ -535,6 +535,8 @@ $('#zone-options').addEventListener('click', (event) => { const button = event.t
 $('#table-options').addEventListener('click', (event) => { const button = event.target.closest('[data-table]'); if (button) { locationDraft.table = Number(button.dataset.table); renderLocationOptions(); } });
 $('#checkout-button').addEventListener('click', openCheckout);
 $('#payment-form').addEventListener('submit', completePayment);
+$('#cancel-payment').addEventListener('click', () => $('#payment-dialog').close('cancel'));
+$$('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.closeDialog}`).close('cancel')));
 $('#payment-form').addEventListener('change', updatePayment);
 $('#cash-received').addEventListener('input', updatePayment);
 $('#quick-cash').addEventListener('click', (event) => { const button = event.target.closest('[data-cash]'); if (button) { $('#cash-received').value = button.dataset.cash; updatePayment(); } });
