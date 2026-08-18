@@ -469,6 +469,7 @@ $('#orders-table').addEventListener('click', (event) => { const receipt = event.
 $('#add-product').addEventListener('click', () => openProductForm());
 $('#product-admin-grid').addEventListener('click', (event) => { const edit = event.target.closest('[data-edit-product]'); const toggle = event.target.closest('[data-toggle-product]'); if (edit) openProductForm(edit.dataset.editProduct); if (toggle) toggleProduct(toggle.dataset.toggleProduct); });
 $('#product-form').addEventListener('submit', saveProduct);
+$('#cancel-product').addEventListener('click', () => $('#product-dialog').close('cancel'));
 $('#product-image').addEventListener('change', async (event) => {
   const [file] = event.target.files;
   if (!file) return;

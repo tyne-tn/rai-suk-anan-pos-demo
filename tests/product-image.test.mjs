@@ -13,6 +13,11 @@ test('product editor exposes a mobile-friendly image upload', () => {
   assert.match(html, /id="remove-product-image"/);
 });
 
+test('product editor has an explicit cancel action beside save', () => {
+  assert.match(html, /class="product-form-actions"/);
+  assert.match(html, /type="button"[^>]*id="cancel-product"[^>]*>ยกเลิก<\/button>/);
+});
+
 test('uploaded images are validated, compressed and used in product views', () => {
   assert.match(app, /file\.size > 8 \* 1024 \* 1024/);
   assert.match(app, /toDataURL\('image\/webp', 0\.76\)/);
