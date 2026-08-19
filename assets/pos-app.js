@@ -604,7 +604,7 @@ function renderReports() {
 }
 
 function renderProductAdmin() {
-  $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}">${productVisual(product, 'admin-photo', 'admin-emoji')}<span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ขาย ${money.format(product.price)} · ${Number.isFinite(Number(product.cost)) ? `ต้นทุน ${money.format(Number(product.cost))}` : 'ยังไม่ใส่ต้นทุน'}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/><path d="m4 4 16 16"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/></svg>'}</button></span></article>`).join('');
+  $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}">${productVisual(product, 'admin-photo', 'admin-emoji')}<span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ขาย ${money.format(product.price)} · ${Number.isFinite(Number(product.cost)) ? `ต้นทุน ${money.format(Number(product.cost))}` : 'ยังไม่ใส่ต้นทุน'}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/><path d="m4 4 16 16"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/></svg>'}</button><button data-delete-product="${escapeHtml(product.id)}" title="ลบสินค้า"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button></span></article>`).join('');
 }
 
 function openProductForm(productId = '') {
@@ -665,6 +665,24 @@ function toggleProduct(productId) {
   renderCategories();
   renderProducts();
   renderProductAdmin();
+}
+
+function deleteProduct(productId) {
+  const product = state.products.find((item) => item.id === productId);
+  if (!product || !window.confirm(`ลบสินค้า “${product.name}” ออกจากระบบ?\nรายการขายย้อนหลังจะไม่ถูกลบ`)) return;
+  state.products = state.products.filter((item) => item.id !== productId);
+  state.cart = state.cart.filter((line) => line.productId !== productId);
+  state.heldOrders = state.heldOrders.filter((order) => !order.cart.some((line) => line.productId === productId));
+  if (state.currentHeldOrderId && !state.heldOrders.some((order) => order.id === state.currentHeldOrderId)) setCurrentHeldOrder();
+  save(STORAGE_KEYS.products, state.products);
+  save(STORAGE_KEYS.cart, state.cart);
+  save(STORAGE_KEYS.heldOrders, state.heldOrders);
+  renderCategories();
+  renderProducts();
+  renderProductAdmin();
+  renderCart();
+  renderHeldOrders();
+  showToast('ลบสินค้าแล้ว');
 }
 
 function showReceipt(order) {
@@ -756,7 +774,7 @@ $('#orders-date').addEventListener('change', renderOrders);
 $('#report-date').addEventListener('change', renderReports);
 $('#orders-table').addEventListener('click', (event) => { const receipt = event.target.closest('[data-receipt]'); const voidButton = event.target.closest('[data-void]'); if (receipt) showReceipt(state.orders.find((order) => order.id === receipt.dataset.receipt)); if (voidButton) voidOrder(voidButton.dataset.void); });
 $('#add-product').addEventListener('click', () => openProductForm());
-$('#product-admin-grid').addEventListener('click', (event) => { const edit = event.target.closest('[data-edit-product]'); const toggle = event.target.closest('[data-toggle-product]'); if (edit) openProductForm(edit.dataset.editProduct); if (toggle) toggleProduct(toggle.dataset.toggleProduct); });
+$('#product-admin-grid').addEventListener('click', (event) => { const edit = event.target.closest('[data-edit-product]'); const toggle = event.target.closest('[data-toggle-product]'); const remove = event.target.closest('[data-delete-product]'); if (edit) openProductForm(edit.dataset.editProduct); if (toggle) toggleProduct(toggle.dataset.toggleProduct); if (remove) deleteProduct(remove.dataset.deleteProduct); });
 $('#product-form').addEventListener('submit', saveProduct);
 $('#product-category').addEventListener('change', (event) => {
   if (!$('#product-id').value) $('#product-spice-enabled').checked = supportsSpiceLevel({ category: event.target.value.trim() });

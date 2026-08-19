@@ -25,3 +25,9 @@ test('uploaded images are validated, compressed and used in product views', () =
   assert.match(app, /productVisual\(product, 'line-photo'/);
   assert.match(app, /productVisual\(product, 'admin-photo'/);
 });
+
+test('product management exposes a confirmed delete action', () => {
+  assert.match(app, /data-delete-product/);
+  assert.match(app, /function deleteProduct/);
+  assert.match(app, /รายการขายย้อนหลังจะไม่ถูกลบ/);
+});
