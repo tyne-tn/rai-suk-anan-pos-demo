@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_PRODUCTS, groupCatalogProducts } from '../assets/pos-core.js';
+import { DEFAULT_PRODUCTS, getProductCategories, groupCatalogProducts } from '../assets/pos-core.js';
 
 test('Loyverse catalog contains only fixed-price sellable items', () => {
   assert.equal(DEFAULT_PRODUCTS.length, 103);
@@ -8,6 +8,15 @@ test('Loyverse catalog contains only fixed-price sellable items', () => {
   assert.equal(new Set(DEFAULT_PRODUCTS.map((product) => product.name)).size, DEFAULT_PRODUCTS.length);
   assert.ok(DEFAULT_PRODUCTS.every((product) => Number.isFinite(product.price) && product.price > 0));
   assert.ok(DEFAULT_PRODUCTS.every((product) => product.active));
+});
+
+test('product editor categories are unique and keep catalog order', () => {
+  assert.deepEqual(getProductCategories([
+    { category: 'อาหาร' },
+    { category: 'เครื่องดื่ม' },
+    { category: 'อาหาร' },
+    { category: '' },
+  ]), ['อาหาร', 'เครื่องดื่ม']);
 });
 
 test('Loyverse variants are represented as distinct POS products', () => {

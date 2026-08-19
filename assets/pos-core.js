@@ -2,6 +2,10 @@ import { LOYVERSE_PRODUCTS } from './pos-products.js';
 
 export const DEFAULT_PRODUCTS = LOYVERSE_PRODUCTS;
 
+export function getProductCategories(products) {
+  return [...new Set(products.map((product) => product.category).filter(Boolean))];
+}
+
 export function groupCatalogProducts(products) {
   const groups = new Map();
   products.forEach((product) => {
@@ -85,9 +89,31 @@ function normalizeAddOns(value) {
   });
 }
 
-export function calculateCart(cart, products) {
+function roundMoney(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function normalizeDiscount(value) {
+  if (!value || value.type === 'none' || value.value === '' || value.value === null || value.value === undefined) return undefined;
+  if (!['amount', 'percent'].includes(value.type)) throw new Error('ประเภทส่วนลดไม่ถูกต้อง');
+  const amount = Number(value.value);
+  if (!Number.isFinite(amount) || amount < 0 || (value.type === 'percent' && amount > 100)) {
+    throw new Error('ส่วนลดไม่ถูกต้อง');
+  }
+  return { type: value.type, value: amount };
+}
+
+function discountAmount(discount, base) {
+  if (!discount) return 0;
+  const amount = discount.type === 'percent' ? base * discount.value / 100 : discount.value;
+  return roundMoney(Math.min(base, amount));
+}
+
+export function calculateCart(cart, products, orderDiscountValue) {
   const productMap = new Map(products.map((product) => [product.id, product]));
   let subtotal = 0;
+  let grossSubtotal = 0;
+  let itemDiscountTotal = 0;
   let itemCount = 0;
 
   const items = cart.map((entry) => {
@@ -101,13 +127,18 @@ export function calculateCart(cart, products) {
     const addOns = supportsAddOns(product) ? normalizeAddOns(entry.addOns) : [];
     const addOnTotal = addOns.reduce((total, addOn) => total + addOn.price, 0);
     const unitPrice = product.price + addOnTotal;
-    const lineTotal = unitPrice * quantity;
+    const grossLineTotal = roundMoney(unitPrice * quantity);
+    const discount = normalizeDiscount(entry.discount);
+    const itemDiscountAmount = discountAmount(discount, grossLineTotal);
+    const lineTotal = roundMoney(grossLineTotal - itemDiscountAmount);
     const hasCost = product.cost !== undefined && product.cost !== null && product.cost !== '' && Number.isFinite(Number(product.cost)) && Number(product.cost) >= 0;
     const unitCost = hasCost ? Number(product.cost) : null;
     const lineCost = hasCost ? unitCost * quantity : null;
     const spiceLevel = supportsSpiceLevel(product) ? entry.spiceLevel || 'เผ็ดกลาง' : undefined;
     if (spiceLevel && !SPICE_LEVELS.includes(spiceLevel)) throw new Error('ระดับความเผ็ดไม่ถูกต้อง');
+    grossSubtotal += grossLineTotal;
     subtotal += lineTotal;
+    itemDiscountTotal += itemDiscountAmount;
     itemCount += quantity;
     return {
       lineId: entry.lineId || product.id,
@@ -116,7 +147,10 @@ export function calculateCart(cart, products) {
       basePrice: product.price,
       unitPrice,
       quantity,
+      grossLineTotal,
       lineTotal,
+      discount,
+      discountAmount: itemDiscountAmount,
       unitCost,
       lineCost,
       addOns,
@@ -125,7 +159,20 @@ export function calculateCart(cart, products) {
     };
   });
 
-  return { items, subtotal, total: subtotal, itemCount };
+  const orderDiscount = normalizeDiscount(orderDiscountValue);
+  const orderDiscountAmount = discountAmount(orderDiscount, subtotal);
+  const total = roundMoney(subtotal - orderDiscountAmount);
+  return {
+    items,
+    grossSubtotal: roundMoney(grossSubtotal),
+    subtotal: roundMoney(subtotal),
+    itemDiscountTotal: roundMoney(itemDiscountTotal),
+    orderDiscount,
+    orderDiscountAmount,
+    discountTotal: roundMoney(itemDiscountTotal + orderDiscountAmount),
+    total,
+    itemCount,
+  };
 }
 
 function bangkokDateParts(date) {
@@ -147,11 +194,12 @@ export function createOrder({
   now = new Date(),
   sequence = 1,
   serviceLocation,
+  orderDiscount,
 }) {
   if (!PAYMENT_METHODS.has(paymentMethod)) throw new Error('วิธีชำระเงินไม่ถูกต้อง');
   if (!Number.isInteger(sequence) || sequence < 1) throw new Error('ลำดับออเดอร์ไม่ถูกต้อง');
 
-  const totals = calculateCart(cart, products);
+  const totals = calculateCart(cart, products, orderDiscount);
   if (totals.itemCount === 0) throw new Error('กรุณาเลือกสินค้า');
 
   const received = paymentMethod === 'cash' ? Number(amountReceived) : totals.total;
@@ -167,7 +215,12 @@ export function createOrder({
     createdAt: isoDate,
     items: totals.items,
     itemCount: totals.itemCount,
+    grossSubtotal: totals.grossSubtotal,
     subtotal: totals.subtotal,
+    itemDiscountTotal: totals.itemDiscountTotal,
+    orderDiscount: totals.orderDiscount,
+    orderDiscountAmount: totals.orderDiscountAmount,
+    discountTotal: totals.discountTotal,
     total: totals.total,
     paymentMethod,
     amountReceived: received,
@@ -184,8 +237,9 @@ export function createHeldOrder({
   now = new Date(),
   id = `held-${now.getTime()}`,
   createdAt,
+  orderDiscount,
 }) {
-  const totals = calculateCart(cart, products);
+  const totals = calculateCart(cart, products, orderDiscount);
   if (totals.itemCount === 0) throw new Error('กรุณาเลือกสินค้า');
   const location = normalizeServiceLocation(serviceLocation);
   const timestamp = now.toISOString();
@@ -195,8 +249,11 @@ export function createHeldOrder({
     createdAt: createdAt || timestamp,
     updatedAt: timestamp,
     cart: structuredClone(cart),
+    orderDiscount: totals.orderDiscount,
     serviceLocation: location,
     itemCount: totals.itemCount,
+    grossSubtotal: totals.grossSubtotal,
+    discountTotal: totals.discountTotal,
     total: totals.total,
   };
 }

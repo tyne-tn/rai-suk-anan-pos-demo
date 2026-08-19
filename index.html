@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=Sriracha&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/pos.css">
+  <link rel="stylesheet" href="assets/pos.css?v=discounts-v1">
 </head>
 <body>
   <div class="app-shell">
@@ -62,6 +62,11 @@
           <div class="cart-empty" id="cart-empty"><span>🧺</span><strong>ยังไม่มีสินค้า</strong><p>แตะเมนูเพื่อเพิ่มลงออเดอร์</p></div>
           <div class="cart-summary">
             <div><span>จำนวนสินค้า</span><strong id="cart-count">0 รายการ</strong></div>
+            <div class="order-discount-control">
+              <span>ส่วนลดท้ายบิล</span>
+              <span class="discount-inputs"><select id="order-discount-type" aria-label="ประเภทส่วนลดท้ายบิล"><option value="none">ไม่มี</option><option value="amount">บาท</option><option value="percent">เปอร์เซ็นต์</option></select><input id="order-discount-value" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0" aria-label="จำนวนส่วนลดท้ายบิล" hidden></span>
+            </div>
+            <div id="cart-discount-row" hidden><span>ส่วนลดรวม</span><strong id="cart-discount">−฿0</strong></div>
             <div class="grand-total"><span>ยอดสุทธิ</span><strong id="cart-total">฿0</strong></div>
             <div class="cart-checkout-actions">
               <button type="button" class="kitchen-print-button" id="print-kitchen-order" disabled><span>พิมพ์ครัว</span><strong>▤</strong></button>
@@ -155,8 +160,7 @@
     <form method="dialog" class="modal-card" id="product-form">
       <div class="modal-head"><div><p class="eyebrow">PRODUCT</p><h2 id="product-form-title">เพิ่มสินค้า</h2></div><button type="button" class="close-button" data-close-dialog="product-dialog" aria-label="ปิด">×</button></div>
       <input type="hidden" id="product-id">
-      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคาขาย (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>ต้นทุนต่อหน่วย (บาท)<input id="product-cost" type="number" min="0" step="0.01" placeholder="ยังไม่ระบุ"></label><label>หมวดหมู่<input id="product-category" required maxlength="30" list="category-list"></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label><label class="feature-toggle"><span><strong>ของเพิ่ม</strong><small>แสดงตัวเลือกเพิ่มข้าวและไข่ในหน้าขาย</small></span><input id="product-addons-enabled" type="checkbox" role="switch"></label><label class="feature-toggle"><span><strong>ระดับความเผ็ด</strong><small>แสดงตัวเลือกความเผ็ดในหน้าขาย</small></span><input id="product-spice-enabled" type="checkbox" role="switch"></label><label class="product-image-field">รูปสินค้า<input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><span class="product-image-preview"><img id="product-image-preview" alt="ตัวอย่างรูปสินค้า" hidden><span id="product-image-placeholder">เลือกรูปหรือถ่ายภาพ</span></span><button type="button" class="text-button danger" id="remove-product-image" hidden>ลบรูป</button></label></div>
-      <datalist id="category-list"></datalist>
+      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคาขาย (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>ต้นทุนต่อหน่วย (บาท)<input id="product-cost" type="number" min="0" step="0.01" placeholder="ยังไม่ระบุ"></label><label>หมวดหมู่<select id="product-category" required></select></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label><label class="feature-toggle"><span><strong>ของเพิ่ม</strong><small>แสดงตัวเลือกเพิ่มข้าวและไข่ในหน้าขาย</small></span><input id="product-addons-enabled" type="checkbox" role="switch"></label><label class="feature-toggle"><span><strong>ระดับความเผ็ด</strong><small>แสดงตัวเลือกความเผ็ดในหน้าขาย</small></span><input id="product-spice-enabled" type="checkbox" role="switch"></label><label class="product-image-field">รูปสินค้า<input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><span class="product-image-preview"><img id="product-image-preview" alt="ตัวอย่างรูปสินค้า" hidden><span id="product-image-placeholder">เลือกรูปหรือถ่ายภาพ</span></span><button type="button" class="text-button danger" id="remove-product-image" hidden>ลบรูป</button></label></div>
       <p class="form-error" id="product-error" role="alert"></p>
       <div class="product-form-actions">
         <button type="button" class="cancel-button" id="cancel-product">ยกเลิก</button>
@@ -173,6 +177,7 @@
       <section class="item-option-section" id="spice-section"><h3>ระดับความเผ็ด</h3><div class="choice-grid compact" id="item-spice-options"></div></section>
       <section class="item-option-section" id="addon-section"><h3>ของเพิ่ม</h3><div class="choice-grid" id="addon-options"></div></section>
       <section class="item-option-section"><h3>จำนวน</h3><div class="item-quantity"><button type="button" id="item-quantity-minus" aria-label="ลดจำนวน">−</button><strong id="item-quantity">1</strong><button type="button" id="item-quantity-plus" aria-label="เพิ่มจำนวน">＋</button></div></section>
+      <section class="item-option-section item-discount-section"><h3>ส่วนลดรายการนี้</h3><div class="discount-inputs"><select id="item-discount-type" aria-label="ประเภทส่วนลดสินค้า"><option value="none">ไม่มีส่วนลด</option><option value="amount">จำนวนเงิน (บาท)</option><option value="percent">เปอร์เซ็นต์ (%)</option></select><input id="item-discount-value" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0" aria-label="จำนวนส่วนลดสินค้า" hidden></div><small>คำนวณจากราคารวมของรายการนี้</small></section>
       <label class="item-note">หมายเหตุ<textarea id="item-note" maxlength="120" rows="2" placeholder="เช่น ไม่ใส่ผัก แยกน้ำ"></textarea></label>
       <p class="form-error" id="item-error" role="alert"></p>
       <button class="checkout-button item-add-button" id="confirm-item" value="default"><span>เพิ่มลงออเดอร์</span><strong id="item-total">฿0</strong></button>
@@ -182,6 +187,6 @@
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
   <section class="kitchen-print-root" id="kitchen-print-root" aria-hidden="true"></section>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/pos-app.js?v=spice-toggle-v1"></script>
+  <script type="module" src="assets/pos-app.js?v=discounts-v1"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=spice-toggle-v1';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, getProductCategories, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=discounts-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   serviceLocation: 'rai-pos-service-location-v1',
   heldOrders: 'rai-pos-held-orders-v1',
   currentHeldOrder: 'rai-pos-current-held-order-v1',
+  orderDiscount: 'rai-pos-order-discount-v1',
 };
 
 const productMetadata = new Map(DEFAULT_PRODUCTS.map((product) => [product.id, product]));
@@ -18,6 +19,7 @@ const state = {
   serviceLocation: loadObject(STORAGE_KEYS.serviceLocation),
   heldOrders: load(STORAGE_KEYS.heldOrders, []),
   currentHeldOrderId: localStorage.getItem(STORAGE_KEYS.currentHeldOrder) || '',
+  orderDiscount: loadObject(STORAGE_KEYS.orderDiscount),
   category: 'ทั้งหมด',
   query: '',
 };
@@ -33,7 +35,7 @@ let locationDraft = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
-const money = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 });
+const money = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const dateTime = new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' });
 const dayLabel = new Intl.DateTimeFormat('th-TH', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Bangkok' });
 const timeLabel = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
@@ -136,10 +138,12 @@ function todayKey() {
 
 function cartTotals() {
   try {
-    return calculateCart(state.cart, state.products);
+    return calculateCart(state.cart, state.products, state.orderDiscount);
   } catch {
     state.cart = state.cart.filter((item) => state.products.some((product) => product.id === item.productId));
     save(STORAGE_KEYS.cart, state.cart);
+    state.orderDiscount = null;
+    localStorage.removeItem(STORAGE_KEYS.orderDiscount);
     return calculateCart(state.cart, state.products);
   }
 }
@@ -209,12 +213,13 @@ function selectTakeaway() {
 }
 
 function renderCategories() {
-  const categories = ['ทั้งหมด', ...new Set(state.products.filter((product) => product.active).map((product) => product.category))];
+  const allCategories = getProductCategories(state.products);
+  const categories = ['ทั้งหมด', ...getProductCategories(state.products.filter((product) => product.active))];
   if (!categories.includes(state.category)) state.category = 'ทั้งหมด';
   $('#category-tabs').innerHTML = categories.map((category) => `
     <button class="${category === state.category ? 'is-active' : ''}" data-category="${escapeHtml(category)}">${escapeHtml(category)}</button>
   `).join('');
-  $('#category-list').innerHTML = categories.slice(1).map((category) => `<option value="${escapeHtml(category)}"></option>`).join('');
+  $('#product-category').innerHTML = `<option value="">เลือกหมวดหมู่สินค้า</option>${allCategories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('')}`;
 }
 
 function renderProducts() {
@@ -257,8 +262,14 @@ function renderItemForm() {
   $('#item-spice-options').innerHTML = SPICE_LEVELS.map((level) => `<button type="button" class="choice-button ${level === itemDraft.spiceLevel ? 'is-selected' : ''}" data-item-spice="${escapeHtml(level)}">${escapeHtml(level)}</button>`).join('');
   $('#addon-options').innerHTML = FOOD_ADD_ONS.map((addOn) => `<button type="button" class="choice-button ${itemDraft.addOnIds.includes(addOn.id) ? 'is-selected' : ''}" data-addon="${escapeHtml(addOn.id)}"><span>${escapeHtml(addOn.name)}</span><strong>+${money.format(addOn.price)}</strong></button>`).join('');
   $('#item-quantity').textContent = itemDraft.quantity;
-  const extras = addOnsEnabled ? FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)).reduce((sum, addOn) => sum + addOn.price, 0) : 0;
-  $('#item-total').textContent = money.format((product.price + extras) * itemDraft.quantity);
+  const discountType = itemDraft.discount?.type || 'none';
+  $('#item-discount-type').value = discountType;
+  $('#item-discount-value').hidden = discountType === 'none';
+  $('#item-discount-value').value = itemDraft.discount?.value ?? '';
+  $('#item-discount-value').max = discountType === 'percent' ? '100' : '';
+  const addOns = addOnsEnabled ? FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)) : [];
+  const totals = calculateCart([{ productId: product.id, quantity: itemDraft.quantity, addOns, discount: itemDraft.discount }], [product]);
+  $('#item-total').textContent = money.format(totals.total);
 }
 
 function openItemForm(groupId) {
@@ -283,6 +294,7 @@ function confirmItem(event) {
     productId: product.id,
     quantity: itemDraft.quantity,
     addOns,
+    discount: itemDraft.discount,
     note: $('#item-note').value.trim(),
     ...(supportsSpiceLevel(product) ? { spiceLevel: itemDraft.spiceLevel } : {}),
   });
@@ -309,6 +321,36 @@ function changeQuantity(lineId, delta) {
   renderCart();
 }
 
+function discountFromInputs(type, rawValue) {
+  if (type === 'none') return undefined;
+  const value = Math.max(0, Number(rawValue || 0));
+  return { type, value: type === 'percent' ? Math.min(100, value) : value };
+}
+
+function discountLabel(discount, amount) {
+  if (!discount || !amount) return '';
+  const value = discount.type === 'percent' ? `${discount.value}%` : money.format(discount.value);
+  return `ส่วนลด ${value} (−${money.format(amount)})`;
+}
+
+function updateItemDiscount() {
+  if (!itemDraft) return;
+  itemDraft.discount = discountFromInputs($('#item-discount-type').value, $('#item-discount-value').value);
+  renderItemForm();
+}
+
+function updateOrderDiscount() {
+  state.orderDiscount = discountFromInputs($('#order-discount-type').value, $('#order-discount-value').value) || null;
+  if (state.orderDiscount) save(STORAGE_KEYS.orderDiscount, state.orderDiscount);
+  else localStorage.removeItem(STORAGE_KEYS.orderDiscount);
+  renderCart();
+}
+
+function clearOrderDiscount() {
+  state.orderDiscount = null;
+  localStorage.removeItem(STORAGE_KEYS.orderDiscount);
+}
+
 function renderCart() {
   const totals = cartTotals();
   const productMap = new Map(state.products.map((product) => [product.id, product]));
@@ -318,6 +360,7 @@ function renderCart() {
     const spiceSelector = item.spiceLevel ? `<label class="spice-picker">ระดับความเผ็ด <select data-spice-line="${escapeHtml(lineId)}" aria-label="ระดับความเผ็ดของ ${escapeHtml(item.name)}">${SPICE_LEVELS.map((level) => `<option value="${escapeHtml(level)}"${level === item.spiceLevel ? ' selected' : ''}>${escapeHtml(level)}</option>`).join('')}</select></label>` : '';
     const details = [
       ...item.addOns.map((addOn) => `${addOn.name} +${money.format(addOn.price)}`),
+      ...(item.discountAmount ? [discountLabel(item.discount, item.discountAmount)] : []),
       ...(item.note ? [`หมายเหตุ: ${item.note}`] : []),
     ];
     return `<div class="cart-line">
@@ -327,6 +370,12 @@ function renderCart() {
   }).join('');
   $('#cart-empty').hidden = totals.itemCount > 0;
   $('#cart-count').textContent = `${totals.itemCount} ชิ้น`;
+  $('#order-discount-type').value = state.orderDiscount?.type || 'none';
+  $('#order-discount-value').hidden = !state.orderDiscount;
+  $('#order-discount-value').value = state.orderDiscount?.value ?? '';
+  $('#order-discount-value').max = state.orderDiscount?.type === 'percent' ? '100' : '';
+  $('#cart-discount-row').hidden = totals.discountTotal === 0;
+  $('#cart-discount').textContent = `−${money.format(totals.discountTotal)}`;
   $('#cart-total').textContent = money.format(totals.total);
   $('#checkout-total').textContent = money.format(totals.total);
   $('#checkout-button').disabled = totals.itemCount === 0;
@@ -377,6 +426,7 @@ function holdCurrentOrder() {
   const held = createHeldOrder({
     cart: state.cart,
     products: state.products,
+    orderDiscount: state.orderDiscount,
     serviceLocation: state.serviceLocation,
     id: current?.id,
     createdAt: current?.createdAt,
@@ -386,6 +436,7 @@ function holdCurrentOrder() {
   save(STORAGE_KEYS.heldOrders, state.heldOrders);
   state.cart = [];
   save(STORAGE_KEYS.cart, state.cart);
+  clearOrderDiscount();
   saveServiceLocation(null);
   setCurrentHeldOrder();
   renderCart();
@@ -399,6 +450,9 @@ function resumeHeldOrder(orderId) {
   if (state.cart.length && state.currentHeldOrderId !== orderId && !window.confirm('แทนที่ออเดอร์ที่กำลังทำด้วยบิลพักนี้?')) return;
   state.cart = structuredClone(held.cart);
   save(STORAGE_KEYS.cart, state.cart);
+  state.orderDiscount = held.orderDiscount || null;
+  if (state.orderDiscount) save(STORAGE_KEYS.orderDiscount, state.orderDiscount);
+  else localStorage.removeItem(STORAGE_KEYS.orderDiscount);
   saveServiceLocation(held.serviceLocation);
   setCurrentHeldOrder(held.id);
   renderCart();
@@ -415,6 +469,7 @@ function cancelHeldOrder(orderId) {
   if (state.currentHeldOrderId === orderId) {
     state.cart = [];
     save(STORAGE_KEYS.cart, state.cart);
+    clearOrderDiscount();
     saveServiceLocation(null);
     setCurrentHeldOrder();
     renderCart();
@@ -473,6 +528,7 @@ function completePayment(event) {
       amountReceived: Number($('#cash-received').value || 0),
       sequence,
       serviceLocation: state.serviceLocation,
+      orderDiscount: state.orderDiscount,
     });
     state.orders.unshift(order);
     if (state.currentHeldOrderId) {
@@ -481,6 +537,7 @@ function completePayment(event) {
       setCurrentHeldOrder();
     }
     state.cart = [];
+    clearOrderDiscount();
     save(STORAGE_KEYS.orders, state.orders);
     save(STORAGE_KEYS.cart, state.cart);
     saveServiceLocation(null);
@@ -612,7 +669,7 @@ function showReceipt(order) {
   document.body.classList.remove('kitchen-printing');
   $('#kitchen-print-root').replaceChildren();
   const method = order.paymentMethod === 'cash' ? 'เงินสด' : 'สแกน QR';
-  $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span><span>โซน / โต๊ะ</span><span>${escapeHtml(order.serviceLocation?.label || 'ไม่ระบุโต๊ะ')}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}${item.spiceLevel ? `<small class="receipt-spice">${escapeHtml(item.spiceLevel)}</small>` : ''}${item.addOns?.length ? `<small class="receipt-spice">${escapeHtml(item.addOns.map((addOn) => `${addOn.name} +${money.format(addOn.price)}`).join(' · '))}</small>` : ''}${item.note ? `<small class="receipt-spice">หมายเหตุ: ${escapeHtml(item.note)}</small>` : ''}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div><div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
+  $('#receipt-content').innerHTML = `<div class="receipt"><div class="modal-head"><span></span><button class="close-button" data-close-receipt aria-label="ปิด">×</button></div><div class="receipt-head"><img src="assets/rai-suk-anan-logo.webp" alt=""><h2>ไร่สุขอนันต์</h2><span>ขอบคุณที่แวะมาพักใจ</span></div><div class="receipt-meta"><span>เลขที่</span><span>${escapeHtml(order.orderNumber)}</span><span>วันที่</span><span>${dateTime.format(new Date(order.createdAt))}</span><span>ชำระโดย</span><span>${method}</span><span>โซน / โต๊ะ</span><span>${escapeHtml(order.serviceLocation?.label || 'ไม่ระบุโต๊ะ')}</span></div><div class="receipt-lines">${order.items.map((item) => `<div class="receipt-line"><span>${escapeHtml(item.name)} × ${item.quantity}${item.spiceLevel ? `<small class="receipt-spice">${escapeHtml(item.spiceLevel)}</small>` : ''}${item.addOns?.length ? `<small class="receipt-spice">${escapeHtml(item.addOns.map((addOn) => `${addOn.name} +${money.format(addOn.price)}`).join(' · '))}</small>` : ''}${item.discountAmount ? `<small class="receipt-spice">${escapeHtml(discountLabel(item.discount, item.discountAmount))}</small>` : ''}${item.note ? `<small class="receipt-spice">หมายเหตุ: ${escapeHtml(item.note)}</small>` : ''}</span><span>${money.format(item.lineTotal)}</span></div>`).join('')}</div>${order.discountTotal ? `<div class="receipt-meta"><span>ยอดก่อนส่วนลด</span><span>${money.format(order.grossSubtotal ?? order.subtotal + order.discountTotal)}</span><span>ส่วนลดรวม</span><span>−${money.format(order.discountTotal)}</span></div>` : ''}<div class="receipt-total"><strong>ยอดสุทธิ</strong><strong>${money.format(order.total)}</strong></div>${order.paymentMethod === 'cash' ? `<div class="receipt-meta"><span>รับเงิน</span><span>${money.format(order.amountReceived)}</span><span>เงินทอน</span><span>${money.format(order.change)}</span></div>` : ''}<div class="receipt-actions"><button class="primary-button" data-print-receipt>พิมพ์ใบเสร็จ</button><button class="primary-button" data-close-receipt>ปิด</button></div></div>`;
   $('#receipt-dialog').showModal();
 }
 
@@ -663,6 +720,8 @@ $('#held-orders').addEventListener('click', (event) => {
   if (cancel) cancelHeldOrder(cancel.dataset.cancelHeld);
 });
 $('#item-form').addEventListener('submit', confirmItem);
+$('#item-discount-type').addEventListener('change', updateItemDiscount);
+$('#item-discount-value').addEventListener('input', updateItemDiscount);
 $('#item-form').addEventListener('click', (event) => {
   if (!itemDraft) return;
   const variant = event.target.closest('[data-variant]');
@@ -675,7 +734,9 @@ $('#item-form').addEventListener('click', (event) => {
   if (event.target.closest('#item-quantity-plus')) itemDraft.quantity += 1;
   if (variant || spice || addOn || event.target.closest('#item-quantity-minus, #item-quantity-plus')) renderItemForm();
 });
-$('#clear-cart').addEventListener('click', () => { if ((!state.cart.length && !state.serviceLocation) || window.confirm('ล้างออเดอร์ปัจจุบัน?\nบิลที่พักไว้จะยังอยู่ในหน้ารายการขาย')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); saveServiceLocation(null); setCurrentHeldOrder(); renderCart(); renderHeldOrders(); } });
+$('#clear-cart').addEventListener('click', () => { if ((!state.cart.length && !state.serviceLocation) || window.confirm('ล้างออเดอร์ปัจจุบัน?\nบิลที่พักไว้จะยังอยู่ในหน้ารายการขาย')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); clearOrderDiscount(); saveServiceLocation(null); setCurrentHeldOrder(); renderCart(); renderHeldOrders(); } });
+$('#order-discount-type').addEventListener('change', updateOrderDiscount);
+$('#order-discount-value').addEventListener('input', updateOrderDiscount);
 $('#choose-location').addEventListener('click', openLocationDialog);
 $('#location-form').addEventListener('submit', confirmLocation);
 $('#cancel-location').addEventListener('click', () => $('#location-dialog').close('cancel'));
