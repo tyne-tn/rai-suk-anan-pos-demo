@@ -32,13 +32,18 @@ const NON_SPICY_CATEGORIES = new Set([
 
 export const SPICE_LEVELS = ['ไม่เผ็ด', 'เผ็ดน้อย', 'เผ็ดกลาง', 'เผ็ดมาก'];
 
-export function supportsSpiceLevel(product) {
+function categorySupportsFoodCustomization(product) {
   return Boolean(product?.category) && !NON_SPICY_CATEGORIES.has(product.category);
+}
+
+export function supportsSpiceLevel(product) {
+  if (typeof product?.spiceLevelEnabled === 'boolean') return product.spiceLevelEnabled;
+  return categorySupportsFoodCustomization(product);
 }
 
 export function supportsAddOns(product) {
   if (typeof product?.addOnsEnabled === 'boolean') return product.addOnsEnabled;
-  return supportsSpiceLevel(product);
+  return categorySupportsFoodCustomization(product);
 }
 
 const PAYMENT_METHODS = new Set(['cash', 'qr']);

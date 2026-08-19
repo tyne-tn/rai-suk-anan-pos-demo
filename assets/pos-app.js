@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=daily-profit-v1';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=spice-toggle-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
@@ -248,8 +248,9 @@ function renderItemForm() {
   const variants = state.products.filter((item) => item.active && (item.groupId || item.id) === itemDraft.groupId);
   $('#variant-section').hidden = variants.length < 2;
   $('#variant-options').innerHTML = variants.map((item) => `<button type="button" class="choice-button ${item.id === itemDraft.productId ? 'is-selected' : ''}" data-variant="${escapeHtml(item.id)}"><span>${escapeHtml(item.optionName || item.name)}</span><strong>${money.format(item.price)}</strong></button>`).join('');
-  const food = supportsSpiceLevel(product);
-  $('#spice-section').hidden = !food;
+  const spiceEnabled = supportsSpiceLevel(product);
+  $('#spice-section').hidden = !spiceEnabled;
+  if (!spiceEnabled) itemDraft.spiceLevel = undefined;
   const addOnsEnabled = supportsAddOns(product);
   $('#addon-section').hidden = !addOnsEnabled;
   if (!addOnsEnabled) itemDraft.addOnIds = [];
@@ -557,6 +558,7 @@ function openProductForm(productId = '') {
   $('#product-category').value = product?.category || '';
   $('#product-emoji').value = product?.emoji || '☕';
   $('#product-addons-enabled').checked = product ? supportsAddOns(product) : true;
+  $('#product-spice-enabled').checked = product ? supportsSpiceLevel(product) : true;
   pendingProductImage = safeProductImage(product?.image);
   updateProductImagePreview(pendingProductImage);
   $('#product-form-title').textContent = product ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า';
@@ -574,17 +576,18 @@ function saveProduct(event) {
   const cost = costValue === '' ? undefined : Number(costValue);
   const emoji = $('#product-emoji').value.trim() || '☕';
   const addOnsEnabled = $('#product-addons-enabled').checked;
+  const spiceLevelEnabled = $('#product-spice-enabled').checked;
   if (!name || !category || !Number.isFinite(price) || price <= 0 || (cost !== undefined && (!Number.isFinite(cost) || cost < 0))) {
     $('#product-error').textContent = 'กรุณากรอกชื่อ หมวดหมู่ ราคาขาย และต้นทุนให้ถูกต้อง';
     return;
   }
   if (id) {
     const product = state.products.find((item) => item.id === id);
-    Object.assign(product, { name, category, price, cost, emoji, image: pendingProductImage, addOnsEnabled });
+    Object.assign(product, { name, category, price, cost, emoji, image: pendingProductImage, addOnsEnabled, spiceLevelEnabled });
     if (cost === undefined) delete product.cost;
   } else {
     const newId = `product-${Date.now()}`;
-    state.products.push({ id: newId, name, category, price, ...(cost === undefined ? {} : { cost }), emoji, image: pendingProductImage, addOnsEnabled, active: true });
+    state.products.push({ id: newId, name, category, price, ...(cost === undefined ? {} : { cost }), emoji, image: pendingProductImage, addOnsEnabled, spiceLevelEnabled, active: true });
   }
   save(STORAGE_KEYS.products, state.products);
   $('#product-dialog').close();
@@ -692,6 +695,9 @@ $('#orders-table').addEventListener('click', (event) => { const receipt = event.
 $('#add-product').addEventListener('click', () => openProductForm());
 $('#product-admin-grid').addEventListener('click', (event) => { const edit = event.target.closest('[data-edit-product]'); const toggle = event.target.closest('[data-toggle-product]'); if (edit) openProductForm(edit.dataset.editProduct); if (toggle) toggleProduct(toggle.dataset.toggleProduct); });
 $('#product-form').addEventListener('submit', saveProduct);
+$('#product-category').addEventListener('change', (event) => {
+  if (!$('#product-id').value) $('#product-spice-enabled').checked = supportsSpiceLevel({ category: event.target.value.trim() });
+});
 $('#cancel-product').addEventListener('click', () => $('#product-dialog').close('cancel'));
 $('#product-image').addEventListener('change', async (event) => {
   const [file] = event.target.files;
