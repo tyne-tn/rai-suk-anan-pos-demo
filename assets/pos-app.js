@@ -33,6 +33,10 @@ const FOOD_ADD_ONS = [
 ];
 const DEFAULT_ADD_ONS = structuredClone(FOOD_ADD_ONS);
 state.options.addOns = Array.isArray(state.options.addOns) && state.options.addOns.length ? state.options.addOns : DEFAULT_ADD_ONS;
+state.options.categories = getProductCategories([
+  ...state.products,
+  ...(Array.isArray(state.options.categories) ? state.options.categories.map((category) => ({ category })) : []),
+]);
 
 let itemDraft = null;
 let locationDraft = null;
@@ -218,7 +222,7 @@ function selectTakeaway() {
 }
 
 function renderCategories() {
-  const allCategories = getProductCategories(state.products);
+  const allCategories = state.options.categories;
   const categories = ['ทั้งหมด', ...getProductCategories(state.products.filter((product) => product.active))];
   if (!categories.includes(state.category)) state.category = 'ทั้งหมด';
   $('#category-tabs').innerHTML = categories.map((category) => `
@@ -607,6 +611,60 @@ function renderReports() {
   $('#top-products').innerHTML = summary.topProducts.slice(0, 6).map((product, index) => `<div class="rank-item"><span class="rank-number">${String(index + 1).padStart(2, '0')}</span><div><strong>${escapeHtml(product.name)}</strong><small>${product.quantity} ชิ้น</small></div><strong>${money.format(product.revenue)}</strong></div>`).join('') || '<div class="empty-state"><strong>ยังไม่มีข้อมูล</strong><p>เริ่มขายสินค้าเพื่อดูอันดับ</p></div>';
 }
 
+function switchProductSection(section) {
+  $$('[data-product-section]').forEach((button) => button.classList.toggle('is-active', button.dataset.productSection === section));
+  $$('[data-product-panel]').forEach((panel) => panel.classList.toggle('is-active', panel.dataset.productPanel === section));
+  if (section === 'categories') renderCategoryAdmin();
+  if (section === 'options') renderOptionsAdmin();
+}
+
+function renderCategoryAdmin() {
+  $('#category-admin-list').innerHTML = state.options.categories.map((category) => {
+    const count = state.products.filter((product) => product.category === category).length;
+    return `<article class="catalog-admin-row"><span class="catalog-setting-icon">▦</span><div><strong>${escapeHtml(category)}</strong><small>${count.toLocaleString('th-TH')} สินค้า</small></div><span class="catalog-admin-actions"><button data-rename-category="${escapeHtml(category)}">แก้ไข</button><button class="danger" data-delete-category="${escapeHtml(category)}" ${count ? 'disabled title="ย้ายสินค้าออกจากหมวดหมู่นี้ก่อน"' : ''}>ลบ</button></span></article>`;
+  }).join('') || '<div class="held-orders-empty">ยังไม่มีหมวดหมู่สินค้า</div>';
+}
+
+function addCategory() {
+  const name = window.prompt('ชื่อหมวดหมู่ใหม่')?.trim();
+  if (!name) return;
+  if (state.options.categories.includes(name)) return showToast('มีหมวดหมู่นี้อยู่แล้ว');
+  state.options.categories.push(name);
+  save(STORAGE_KEYS.options, state.options);
+  renderCategories();
+  renderCategoryAdmin();
+  showToast('เพิ่มหมวดหมู่แล้ว');
+}
+
+function renameCategory(category) {
+  const name = window.prompt('แก้ไขชื่อหมวดหมู่', category)?.trim();
+  if (!name || name === category) return;
+  if (state.options.categories.includes(name)) return showToast('มีหมวดหมู่นี้อยู่แล้ว');
+  state.options.categories = state.options.categories.map((item) => item === category ? name : item);
+  state.products.forEach((product) => { if (product.category === category) product.category = name; });
+  save(STORAGE_KEYS.options, state.options);
+  save(STORAGE_KEYS.products, state.products);
+  renderCategories();
+  renderProducts();
+  renderProductAdmin();
+  renderCategoryAdmin();
+  showToast('แก้ไขหมวดหมู่แล้ว');
+}
+
+function deleteCategory(category) {
+  if (state.products.some((product) => product.category === category)) return showToast('ย้ายสินค้าออกจากหมวดหมู่นี้ก่อน');
+  if (!window.confirm(`ลบหมวดหมู่ “${category}”?`)) return;
+  state.options.categories = state.options.categories.filter((item) => item !== category);
+  save(STORAGE_KEYS.options, state.options);
+  renderCategories();
+  renderCategoryAdmin();
+  showToast('ลบหมวดหมู่แล้ว');
+}
+
+function renderOptionsAdmin() {
+  $('#addon-summary').textContent = state.options.addOns.map((addOn) => `${addOn.name} ${money.format(addOn.price)}`).join(' · ');
+}
+
 function renderProductAdmin() {
   $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}">${productVisual(product, 'admin-photo', 'admin-emoji')}<span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ขาย ${money.format(product.price)} · ${Number.isFinite(Number(product.cost)) ? `ต้นทุน ${money.format(Number(product.cost))}` : 'ยังไม่ใส่ต้นทุน'}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/><path d="m4 4 16 16"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/></svg>'}</button><button data-delete-product="${escapeHtml(product.id)}" title="ลบสินค้า"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button></span></article>`).join('');
 }
@@ -627,6 +685,7 @@ function saveOptions(event) {
       return { ...addOn, name, price };
     });
     save(STORAGE_KEYS.options, state.options);
+    renderOptionsAdmin();
     $('#options-dialog').close();
     showToast('บันทึกตัวเลือกแล้ว');
   } catch (error) {
@@ -801,6 +860,9 @@ $('#orders-date').addEventListener('change', renderOrders);
 $('#report-date').addEventListener('change', renderReports);
 $('#orders-table').addEventListener('click', (event) => { const receipt = event.target.closest('[data-receipt]'); const voidButton = event.target.closest('[data-void]'); if (receipt) showReceipt(state.orders.find((order) => order.id === receipt.dataset.receipt)); if (voidButton) voidOrder(voidButton.dataset.void); });
 $('#add-product').addEventListener('click', () => openProductForm());
+$('.product-management-menu').addEventListener('click', (event) => { const button = event.target.closest('[data-product-section]'); if (button) switchProductSection(button.dataset.productSection); });
+$('#add-category').addEventListener('click', addCategory);
+$('#category-admin-list').addEventListener('click', (event) => { const rename = event.target.closest('[data-rename-category]'); const remove = event.target.closest('[data-delete-category]'); if (rename) renameCategory(rename.dataset.renameCategory); if (remove) deleteCategory(remove.dataset.deleteCategory); });
 $('#manage-options').addEventListener('click', openOptionsForm);
 $('#options-form').addEventListener('submit', saveOptions);
 $('#cancel-options').addEventListener('click', () => $('#options-dialog').close('cancel'));

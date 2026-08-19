@@ -39,3 +39,13 @@ test('product management exposes editable add-on settings', () => {
   assert.match(app, /function saveOptions/);
   assert.match(app, /data-option-price/);
 });
+
+test('product management is split into Loyverse-style catalog sections', () => {
+  for (const section of ['items', 'categories', 'options', 'discounts']) {
+    assert.match(html, new RegExp(`data-product-section="${section}"`));
+    assert.match(html, new RegExp(`data-product-panel="${section}"`));
+  }
+  assert.match(app, /function switchProductSection/);
+  assert.match(app, /function renderCategoryAdmin/);
+  assert.match(app, /function renameCategory/);
+});
