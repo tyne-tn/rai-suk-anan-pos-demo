@@ -114,7 +114,7 @@
       <section class="view content-view" id="products-view">
         <div class="section-toolbar">
           <div><h2>จัดการสินค้า</h2><p>เพิ่ม แก้ไขราคา หรือพักขายเมนู</p></div>
-          <button class="primary-button" id="add-product">＋ เพิ่มสินค้า</button>
+          <button class="secondary-button" id="manage-options">ตั้งค่าตัวเลือก</button><button class="primary-button" id="add-product">＋ เพิ่มสินค้า</button>
         </div>
         <div class="product-admin-grid" id="product-admin-grid"></div>
       </section>
@@ -153,6 +153,16 @@
         <button type="button" class="cancel-button" id="cancel-payment">ย้อนกลับ</button>
         <button class="checkout-button confirm-payment" id="confirm-payment" type="submit" value="default"><span>ยืนยันการชำระเงิน</span><strong>✓</strong></button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="options-dialog" class="modal">
+    <form method="dialog" class="modal-card" id="options-form">
+      <div class="modal-head"><div><p class="eyebrow">OPTIONS</p><h2>ตั้งค่าของเพิ่ม</h2></div><button type="button" class="close-button" data-close-dialog="options-dialog" aria-label="ปิด">×</button></div>
+      <p class="modal-description">เปลี่ยนชื่อและราคาของเพิ่มที่จะแสดงในหน้าขายได้จากที่นี่</p>
+      <div class="option-settings" id="addon-settings"></div>
+      <p class="form-error" id="options-form-error" role="alert"></p>
+      <div class="product-form-actions"><button type="button" class="cancel-button" id="cancel-options">ยกเลิก</button><button class="primary-button full-button" value="default">บันทึกตัวเลือก</button></div>
     </form>
   </dialog>
 

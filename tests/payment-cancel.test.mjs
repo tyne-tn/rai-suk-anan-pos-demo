@@ -14,6 +14,6 @@ test('payment can only complete from the explicit confirm button', () => {
 
 test('all form header close buttons are non-submit controls', () => {
   const closeButtons = [...html.matchAll(/<button[^>]*class="close-button"[^>]*>/g)].map((match) => match[0]);
-  assert.equal(closeButtons.length, 4);
+  assert.equal(closeButtons.length, 5);
   closeButtons.forEach((button) => assert.match(button, /type="button"/));
 });

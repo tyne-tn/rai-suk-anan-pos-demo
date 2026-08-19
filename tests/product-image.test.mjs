@@ -31,3 +31,11 @@ test('product management exposes a confirmed delete action', () => {
   assert.match(app, /function deleteProduct/);
   assert.match(app, /รายการขายย้อนหลังจะไม่ถูกลบ/);
 });
+
+test('product management exposes editable add-on settings', () => {
+  assert.match(html, /id="manage-options"/);
+  assert.match(html, /id="options-form"/);
+  assert.match(app, /STORAGE_KEYS\.options/);
+  assert.match(app, /function saveOptions/);
+  assert.match(app, /data-option-price/);
+});

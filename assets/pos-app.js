@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   heldOrders: 'rai-pos-held-orders-v1',
   currentHeldOrder: 'rai-pos-current-held-order-v1',
   orderDiscount: 'rai-pos-order-discount-v1',
+  options: 'rai-pos-options-v1',
 };
 
 const productMetadata = new Map(DEFAULT_PRODUCTS.map((product) => [product.id, product]));
@@ -20,6 +21,7 @@ const state = {
   heldOrders: load(STORAGE_KEYS.heldOrders, []),
   currentHeldOrderId: localStorage.getItem(STORAGE_KEYS.currentHeldOrder) || '',
   orderDiscount: loadObject(STORAGE_KEYS.orderDiscount),
+  options: loadObject(STORAGE_KEYS.options) || {},
   category: 'ทั้งหมด',
   query: '',
 };
@@ -29,6 +31,8 @@ const FOOD_ADD_ONS = [
   { id: 'fried-egg', name: 'เพิ่มไข่ดาว', price: 20 },
   { id: 'omelet', name: 'เพิ่มไข่เจียว', price: 20 },
 ];
+const DEFAULT_ADD_ONS = structuredClone(FOOD_ADD_ONS);
+state.options.addOns = Array.isArray(state.options.addOns) && state.options.addOns.length ? state.options.addOns : DEFAULT_ADD_ONS;
 
 let itemDraft = null;
 let locationDraft = null;
@@ -261,14 +265,14 @@ function renderItemForm() {
   $('#addon-section').hidden = !addOnsEnabled;
   if (!addOnsEnabled) itemDraft.addOnIds = [];
   $('#item-spice-options').innerHTML = SPICE_LEVELS.map((level) => `<button type="button" class="choice-button ${level === itemDraft.spiceLevel ? 'is-selected' : ''}" data-item-spice="${escapeHtml(level)}">${escapeHtml(level)}</button>`).join('');
-  $('#addon-options').innerHTML = FOOD_ADD_ONS.map((addOn) => `<button type="button" class="choice-button ${itemDraft.addOnIds.includes(addOn.id) ? 'is-selected' : ''}" data-addon="${escapeHtml(addOn.id)}"><span>${escapeHtml(addOn.name)}</span><strong>+${money.format(addOn.price)}</strong></button>`).join('');
+  $('#addon-options').innerHTML = state.options.addOns.map((addOn) => `<button type="button" class="choice-button ${itemDraft.addOnIds.includes(addOn.id) ? 'is-selected' : ''}" data-addon="${escapeHtml(addOn.id)}"><span>${escapeHtml(addOn.name)}</span><strong>+${money.format(addOn.price)}</strong></button>`).join('');
   $('#item-quantity').textContent = itemDraft.quantity;
   const discountType = itemDraft.discount?.type || 'none';
   $('#item-discount-type').value = discountType;
   $('#item-discount-value').hidden = discountType === 'none';
   $('#item-discount-value').value = itemDraft.discount?.value ?? '';
   $('#item-discount-value').max = discountType === 'percent' ? '100' : '';
-  const addOns = addOnsEnabled ? FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)) : [];
+  const addOns = addOnsEnabled ? state.options.addOns.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)) : [];
   const totals = calculateCart([{ productId: product.id, quantity: itemDraft.quantity, addOns, discount: itemDraft.discount }], [product]);
   $('#item-total').textContent = money.format(totals.total);
 }
@@ -289,7 +293,7 @@ function confirmItem(event) {
   event.preventDefault();
   const product = selectedDraftProduct();
   if (!product) return;
-  const addOns = supportsAddOns(product) ? FOOD_ADD_ONS.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)) : [];
+  const addOns = supportsAddOns(product) ? state.options.addOns.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)) : [];
   state.cart.push({
     lineId: globalThis.crypto?.randomUUID?.() || `line-${Date.now()}`,
     productId: product.id,
@@ -607,6 +611,29 @@ function renderProductAdmin() {
   $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}">${productVisual(product, 'admin-photo', 'admin-emoji')}<span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ขาย ${money.format(product.price)} · ${Number.isFinite(Number(product.cost)) ? `ต้นทุน ${money.format(Number(product.cost))}` : 'ยังไม่ใส่ต้นทุน'}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/><path d="m4 4 16 16"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/></svg>'}</button><button data-delete-product="${escapeHtml(product.id)}" title="ลบสินค้า"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button></span></article>`).join('');
 }
 
+function openOptionsForm() {
+  $('#options-form-error').textContent = '';
+  $('#addon-settings').innerHTML = state.options.addOns.map((addOn) => `<div class="option-setting-row"><label><span>ชื่อของเพิ่ม</span><input data-option-name="${escapeHtml(addOn.id)}" value="${escapeHtml(addOn.name)}" maxlength="30" required></label><label><span>ราคา (บาท)</span><input data-option-price="${escapeHtml(addOn.id)}" type="number" min="1" step="1" value="${addOn.price}" required></label></div>`).join('');
+  $('#options-dialog').showModal();
+}
+
+function saveOptions(event) {
+  event.preventDefault();
+  try {
+    state.options.addOns = state.options.addOns.map((addOn) => {
+      const name = $(`[data-option-name="${addOn.id}"]`).value.trim();
+      const price = Number($(`[data-option-price="${addOn.id}"]`).value);
+      if (!name || !Number.isFinite(price) || price <= 0) throw new Error('กรุณากรอกชื่อและราคาของเพิ่มให้ถูกต้อง');
+      return { ...addOn, name, price };
+    });
+    save(STORAGE_KEYS.options, state.options);
+    $('#options-dialog').close();
+    showToast('บันทึกตัวเลือกแล้ว');
+  } catch (error) {
+    $('#options-form-error').textContent = error.message;
+  }
+}
+
 function openProductForm(productId = '') {
   const product = state.products.find((item) => item.id === productId);
   $('#product-form').reset();
@@ -774,6 +801,9 @@ $('#orders-date').addEventListener('change', renderOrders);
 $('#report-date').addEventListener('change', renderReports);
 $('#orders-table').addEventListener('click', (event) => { const receipt = event.target.closest('[data-receipt]'); const voidButton = event.target.closest('[data-void]'); if (receipt) showReceipt(state.orders.find((order) => order.id === receipt.dataset.receipt)); if (voidButton) voidOrder(voidButton.dataset.void); });
 $('#add-product').addEventListener('click', () => openProductForm());
+$('#manage-options').addEventListener('click', openOptionsForm);
+$('#options-form').addEventListener('submit', saveOptions);
+$('#cancel-options').addEventListener('click', () => $('#options-dialog').close('cancel'));
 $('#product-admin-grid').addEventListener('click', (event) => { const edit = event.target.closest('[data-edit-product]'); const toggle = event.target.closest('[data-toggle-product]'); const remove = event.target.closest('[data-delete-product]'); if (edit) openProductForm(edit.dataset.editProduct); if (toggle) toggleProduct(toggle.dataset.toggleProduct); if (remove) deleteProduct(remove.dataset.deleteProduct); });
 $('#product-form').addEventListener('submit', saveProduct);
 $('#product-category').addEventListener('change', (event) => {
