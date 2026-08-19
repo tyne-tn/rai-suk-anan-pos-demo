@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=Sriracha&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/pos.css?v=discounts-v1">
+  <link rel="stylesheet" href="assets/pos.css?v=options-crud-v1">
 </head>
 <body>
   <div class="app-shell">
@@ -183,6 +183,7 @@
       <div class="modal-head"><div><p class="eyebrow">OPTIONS</p><h2>ตั้งค่าของเพิ่ม</h2></div><button type="button" class="close-button" data-close-dialog="options-dialog" aria-label="ปิด">×</button></div>
       <p class="modal-description">เปลี่ยนชื่อและราคาของเพิ่มที่จะแสดงในหน้าขายได้จากที่นี่</p>
       <div class="option-settings" id="addon-settings"></div>
+      <button type="button" class="option-add-button" id="add-option-row">＋ เพิ่มของเพิ่ม</button>
       <p class="form-error" id="options-form-error" role="alert"></p>
       <div class="product-form-actions"><button type="button" class="cancel-button" id="cancel-options">ยกเลิก</button><button class="primary-button full-button" value="default">บันทึกตัวเลือก</button></div>
     </form>
@@ -219,6 +220,6 @@
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
   <section class="kitchen-print-root" id="kitchen-print-root" aria-hidden="true"></section>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/pos-app.js?v=catalog-management-v1"></script>
+  <script type="module" src="assets/pos-app.js?v=options-crud-v1"></script>
 </body>
 </html>

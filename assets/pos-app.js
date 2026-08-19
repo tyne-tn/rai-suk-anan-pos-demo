@@ -32,7 +32,7 @@ const FOOD_ADD_ONS = [
   { id: 'omelet', name: 'เพิ่มไข่เจียว', price: 20 },
 ];
 const DEFAULT_ADD_ONS = structuredClone(FOOD_ADD_ONS);
-state.options.addOns = Array.isArray(state.options.addOns) && state.options.addOns.length ? state.options.addOns : DEFAULT_ADD_ONS;
+state.options.addOns = Array.isArray(state.options.addOns) ? state.options.addOns : DEFAULT_ADD_ONS;
 state.options.categories = getProductCategories([
   ...state.products,
   ...(Array.isArray(state.options.categories) ? state.options.categories.map((category) => ({ category })) : []),
@@ -40,6 +40,7 @@ state.options.categories = getProductCategories([
 
 let itemDraft = null;
 let locationDraft = null;
+let optionDraft = [];
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -662,27 +663,45 @@ function deleteCategory(category) {
 }
 
 function renderOptionsAdmin() {
-  $('#addon-summary').textContent = state.options.addOns.map((addOn) => `${addOn.name} ${money.format(addOn.price)}`).join(' · ');
+  $('#addon-summary').textContent = state.options.addOns.length
+    ? state.options.addOns.map((addOn) => `${addOn.name} ${money.format(addOn.price)}`).join(' · ')
+    : 'ยังไม่มีของเพิ่ม';
 }
 
 function renderProductAdmin() {
   $('#product-admin-grid').innerHTML = state.products.map((product) => `<article class="admin-card ${product.active ? '' : 'is-inactive'}">${productVisual(product, 'admin-photo', 'admin-emoji')}<span class="admin-info"><strong>${escapeHtml(product.name)}</strong><small>${escapeHtml(product.category)} · ขาย ${money.format(product.price)} · ${Number.isFinite(Number(product.cost)) ? `ต้นทุน ${money.format(Number(product.cost))}` : 'ยังไม่ใส่ต้นทุน'}${product.active ? '' : ' · พักขาย'}</small></span><span class="admin-actions"><button data-edit-product="${escapeHtml(product.id)}" title="แก้ไข">✎</button><button data-toggle-product="${escapeHtml(product.id)}" title="${product.active ? 'พักขาย' : 'เปิดขาย'}">${product.active ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/><path d="m4 4 16 16"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"/><circle cx="12" cy="12" r="2.3"/></svg>'}</button><button data-delete-product="${escapeHtml(product.id)}" title="ลบสินค้า"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button></span></article>`).join('');
 }
 
+function renderOptionSettingsRows() {
+  $('#addon-settings').innerHTML = optionDraft.map((addOn) => `<div class="option-setting-row"><label><span>ชื่อของเพิ่ม</span><input data-option-name="${escapeHtml(addOn.id)}" value="${escapeHtml(addOn.name)}" maxlength="30" required></label><label><span>ราคา (บาท)</span><input data-option-price="${escapeHtml(addOn.id)}" type="number" min="1" step="1" value="${addOn.price || ''}" required></label><button type="button" class="option-delete-button" data-delete-option="${escapeHtml(addOn.id)}" title="ลบตัวเลือก" aria-label="ลบ ${escapeHtml(addOn.name || 'ตัวเลือกนี้')}">⌫</button></div>`).join('') || '<div class="held-orders-empty">ยังไม่มีของเพิ่ม กด “เพิ่มของเพิ่ม” เพื่อสร้างรายการ</div>';
+}
+
 function openOptionsForm() {
   $('#options-form-error').textContent = '';
-  $('#addon-settings').innerHTML = state.options.addOns.map((addOn) => `<div class="option-setting-row"><label><span>ชื่อของเพิ่ม</span><input data-option-name="${escapeHtml(addOn.id)}" value="${escapeHtml(addOn.name)}" maxlength="30" required></label><label><span>ราคา (บาท)</span><input data-option-price="${escapeHtml(addOn.id)}" type="number" min="1" step="1" value="${addOn.price}" required></label></div>`).join('');
+  optionDraft = structuredClone(state.options.addOns);
+  renderOptionSettingsRows();
   $('#options-dialog').showModal();
+}
+
+function addOptionRow() {
+  optionDraft.push({ id: globalThis.crypto?.randomUUID?.() || `addon-${Date.now()}`, name: '', price: '' });
+  renderOptionSettingsRows();
+  $('#addon-settings [data-option-name]:last-of-type')?.focus();
+}
+
+function deleteOptionRow(optionId) {
+  optionDraft = optionDraft.filter((addOn) => addOn.id !== optionId);
+  renderOptionSettingsRows();
 }
 
 function saveOptions(event) {
   event.preventDefault();
   try {
-    state.options.addOns = state.options.addOns.map((addOn) => {
+    state.options.addOns = optionDraft.map((addOn) => {
       const name = $(`[data-option-name="${addOn.id}"]`).value.trim();
       const price = Number($(`[data-option-price="${addOn.id}"]`).value);
       if (!name || !Number.isFinite(price) || price <= 0) throw new Error('กรุณากรอกชื่อและราคาของเพิ่มให้ถูกต้อง');
-      return { ...addOn, name, price };
+      return { id: addOn.id, name, price };
     });
     save(STORAGE_KEYS.options, state.options);
     renderOptionsAdmin();
@@ -864,6 +883,8 @@ $('.product-management-menu').addEventListener('click', (event) => { const butto
 $('#add-category').addEventListener('click', addCategory);
 $('#category-admin-list').addEventListener('click', (event) => { const rename = event.target.closest('[data-rename-category]'); const remove = event.target.closest('[data-delete-category]'); if (rename) renameCategory(rename.dataset.renameCategory); if (remove) deleteCategory(remove.dataset.deleteCategory); });
 $('#manage-options').addEventListener('click', openOptionsForm);
+$('#add-option-row').addEventListener('click', addOptionRow);
+$('#addon-settings').addEventListener('click', (event) => { const remove = event.target.closest('[data-delete-option]'); if (remove) deleteOptionRow(remove.dataset.deleteOption); });
 $('#options-form').addEventListener('submit', saveOptions);
 $('#cancel-options').addEventListener('click', () => $('#options-dialog').close('cancel'));
 $('#product-admin-grid').addEventListener('click', (event) => { const edit = event.target.closest('[data-edit-product]'); const toggle = event.target.closest('[data-toggle-product]'); const remove = event.target.closest('[data-delete-product]'); if (edit) openProductForm(edit.dataset.editProduct); if (toggle) toggleProduct(toggle.dataset.toggleProduct); if (remove) deleteProduct(remove.dataset.deleteProduct); });
