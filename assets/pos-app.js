@@ -210,6 +210,7 @@ function selectTakeaway() {
   saveServiceLocation({ type: 'takeaway', label: 'กลับบ้าน' });
   $('#location-dialog').close();
   showToast('เลือกออเดอร์กลับบ้านแล้ว');
+  if (cartTotals().itemCount) printKitchenOrder();
 }
 
 function renderCategories() {
@@ -442,6 +443,7 @@ function holdCurrentOrder() {
   renderCart();
   renderHeldOrders();
   showToast(`พักบิล ${held.serviceLocation.label} แล้ว`);
+  printKitchenOrder({ cart: held.cart, serviceLocation: held.serviceLocation, printedAt: held.updatedAt });
 }
 
 function resumeHeldOrder(orderId) {

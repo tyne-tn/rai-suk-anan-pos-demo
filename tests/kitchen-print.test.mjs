@@ -12,6 +12,8 @@ test('sale cart and held bills can print a kitchen order', () => {
   assert.match(app, /function printKitchenOrder/);
   assert.match(app, /data-print-held/);
   assert.match(app, /window\.print\(\)/);
+  assert.match(app, /showToast\(`พักบิล \$\{held\.serviceLocation\.label\} แล้ว`\);[\s\S]*printKitchenOrder\(\{ cart: held\.cart/);
+  assert.match(app, /showToast\('เลือกออเดอร์กลับบ้านแล้ว'\);[\s\S]*if \(cartTotals\(\)\.itemCount\) printKitchenOrder\(\)/);
 });
 
 test('57 mm kitchen ticket omits prices and payment data', () => {
