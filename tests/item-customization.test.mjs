@@ -33,3 +33,10 @@ test('item customization rejects invalid add-on prices', () => {
     /ราคาของเพิ่มไม่ถูกต้อง/,
   );
 });
+
+test('zero-price option choices are preserved without increasing the total', () => {
+  const cart = [{ productId: 'food', quantity: 1, addOns: [{ id: 'spice:none', name: 'ระดับความเผ็ด: ไม่เผ็ด', price: 0 }] }];
+  const totals = calculateCart(cart, [food]);
+  assert.equal(totals.total, 65);
+  assert.equal(totals.items[0].addOns[0].price, 0);
+});

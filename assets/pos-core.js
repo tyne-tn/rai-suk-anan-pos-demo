@@ -95,7 +95,7 @@ function normalizeAddOns(value) {
   if (!Array.isArray(value)) return [];
   return value.map((addOn) => {
     const price = Number(addOn?.price);
-    if (!addOn?.id || !addOn?.name || !Number.isFinite(price) || price <= 0) {
+    if (!addOn?.id || !addOn?.name || !Number.isFinite(price) || price < 0) {
       throw new Error('ราคาของเพิ่มไม่ถูกต้อง');
     }
     return { id: String(addOn.id), name: String(addOn.name), price };

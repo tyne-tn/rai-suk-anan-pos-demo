@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, getProductCategories, groupCatalogProducts, isSameServiceLocation, renameProductCategory, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=category-link-v1';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, getProductCategories, groupCatalogProducts, isSameServiceLocation, renameProductCategory, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=sale-options-fix-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
