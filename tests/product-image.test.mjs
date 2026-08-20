@@ -32,15 +32,19 @@ test('product management exposes a confirmed delete action', () => {
   assert.match(app, /รายการขายย้อนหลังจะไม่ถูกลบ/);
 });
 
-test('product management exposes editable add-on settings', () => {
-  assert.match(html, /id="manage-options"/);
-  assert.match(html, /id="options-form"/);
-  assert.match(app, /STORAGE_KEYS\.options/);
+test('product management can create, edit, and delete whole option groups', () => {
+  assert.match(html, /id="option-group-grid"/);
+  assert.match(html, /id="option-group-name"/);
+  assert.match(html, /id="option-group-selection"/);
+  assert.match(app, /state\.options\.groups/);
   assert.match(app, /function saveOptions/);
+  assert.match(app, /function deleteOptionGroup/);
+  assert.match(app, /data-edit-option-group/);
+  assert.match(app, /data-delete-option-group/);
   assert.match(app, /function addOptionRow/);
   assert.match(app, /function deleteOptionRow/);
   assert.match(html, /id="add-option-row"/);
-  assert.match(app, /data-option-price/);
+  assert.match(app, /price < 0/);
 });
 
 test('product management is split into Loyverse-style catalog sections', () => {

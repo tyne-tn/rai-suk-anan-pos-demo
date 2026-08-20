@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=Sriracha&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/pos.css?v=options-crud-v1">
+  <link rel="stylesheet" href="assets/pos.css?v=option-groups-v1">
 </head>
 <body>
   <div class="app-shell">
@@ -130,8 +130,8 @@
               <div class="catalog-admin-list" id="category-admin-list"></div>
             </section>
             <section class="product-management-panel" data-product-panel="options">
-              <div class="section-toolbar"><div><h2>ตัวเลือกเพิ่มเติม</h2><p>ตั้งชื่อและราคาของเพิ่มที่ใช้ร่วมกันในหน้าขาย</p></div><button class="primary-button" id="manage-options">แก้ไขตัวเลือก</button></div>
-              <div class="catalog-setting-grid"><article class="catalog-setting-card"><span class="catalog-setting-icon">＋</span><div><h3>ของเพิ่ม</h3><p id="addon-summary">—</p></div></article><article class="catalog-setting-card"><span class="catalog-setting-icon">♨</span><div><h3>ระดับความเผ็ด</h3><p>ไม่เผ็ด · เผ็ดน้อย · เผ็ดกลาง · เผ็ดมาก</p></div></article></div>
+              <div class="section-toolbar"><div><h2>ตัวเลือกเพิ่มเติม</h2><p>สร้างกลุ่มตัวเลือกสำหรับใช้ร่วมกันในหน้าขาย</p></div><button class="primary-button" id="manage-options">＋ เพิ่มกลุ่มตัวเลือก</button></div>
+              <div class="catalog-setting-grid" id="option-group-grid"></div>
             </section>
             <section class="product-management-panel" data-product-panel="discounts">
               <div class="section-toolbar"><div><h2>ส่วนลด</h2><p>รูปแบบส่วนลดที่รองรับในระบบขาย</p></div></div>
@@ -180,10 +180,12 @@
 
   <dialog id="options-dialog" class="modal">
     <form method="dialog" class="modal-card" id="options-form">
-      <div class="modal-head"><div><p class="eyebrow">OPTIONS</p><h2>ตั้งค่าของเพิ่ม</h2></div><button type="button" class="close-button" data-close-dialog="options-dialog" aria-label="ปิด">×</button></div>
-      <p class="modal-description">เปลี่ยนชื่อและราคาของเพิ่มที่จะแสดงในหน้าขายได้จากที่นี่</p>
+      <div class="modal-head"><div><p class="eyebrow">OPTIONS</p><h2 id="options-form-title">เพิ่มกลุ่มตัวเลือก</h2></div><button type="button" class="close-button" data-close-dialog="options-dialog" aria-label="ปิด">×</button></div>
+      <input type="hidden" id="option-group-id">
+      <div class="form-grid option-group-fields"><label>ชื่อกลุ่มตัวเลือก<input id="option-group-name" required maxlength="40" placeholder="เช่น ขนาดแก้ว"></label><label>วิธีเลือก<select id="option-group-selection"><option value="multiple">เลือกได้หลายรายการ</option><option value="single">เลือกได้หนึ่งรายการ</option></select></label></div>
+      <p class="modal-description">เพิ่มรายการย่อยและราคาได้เอง ราคาศูนย์บาทใช้สำหรับตัวเลือกที่ไม่คิดเงินเพิ่ม</p>
       <div class="option-settings" id="addon-settings"></div>
-      <button type="button" class="option-add-button" id="add-option-row">＋ เพิ่มของเพิ่ม</button>
+      <button type="button" class="option-add-button" id="add-option-row">＋ เพิ่มรายการย่อย</button>
       <p class="form-error" id="options-form-error" role="alert"></p>
       <div class="product-form-actions"><button type="button" class="cancel-button" id="cancel-options">ยกเลิก</button><button class="primary-button full-button" value="default">บันทึกตัวเลือก</button></div>
     </form>
@@ -193,7 +195,7 @@
     <form method="dialog" class="modal-card" id="product-form">
       <div class="modal-head"><div><p class="eyebrow">PRODUCT</p><h2 id="product-form-title">เพิ่มสินค้า</h2></div><button type="button" class="close-button" data-close-dialog="product-dialog" aria-label="ปิด">×</button></div>
       <input type="hidden" id="product-id">
-      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคาขาย (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>ต้นทุนต่อหน่วย (บาท)<input id="product-cost" type="number" min="0" step="0.01" placeholder="ยังไม่ระบุ"></label><label>หมวดหมู่<select id="product-category" required></select></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label><label class="feature-toggle"><span><strong>ของเพิ่ม</strong><small>แสดงตัวเลือกเพิ่มข้าวและไข่ในหน้าขาย</small></span><input id="product-addons-enabled" type="checkbox" role="switch"></label><label class="feature-toggle"><span><strong>ระดับความเผ็ด</strong><small>แสดงตัวเลือกความเผ็ดในหน้าขาย</small></span><input id="product-spice-enabled" type="checkbox" role="switch"></label><label class="product-image-field">รูปสินค้า<input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><span class="product-image-preview"><img id="product-image-preview" alt="ตัวอย่างรูปสินค้า" hidden><span id="product-image-placeholder">เลือกรูปหรือถ่ายภาพ</span></span><button type="button" class="text-button danger" id="remove-product-image" hidden>ลบรูป</button></label></div>
+      <div class="form-grid"><label>ชื่อสินค้า<input id="product-name" required maxlength="40"></label><label>ราคาขาย (บาท)<input id="product-price" required type="number" min="1" step="1"></label><label>ต้นทุนต่อหน่วย (บาท)<input id="product-cost" type="number" min="0" step="0.01" placeholder="ยังไม่ระบุ"></label><label>หมวดหมู่<select id="product-category" required></select></label><label>ไอคอน<input id="product-emoji" maxlength="4" placeholder="☕"></label><label class="feature-toggle"><span><strong>กลุ่มแบบเลือกหลายรายการ</strong><small>แสดงกลุ่มตัวเลือกที่เลือกได้หลายอย่าง</small></span><input id="product-addons-enabled" type="checkbox" role="switch"></label><label class="feature-toggle"><span><strong>กลุ่มแบบเลือกหนึ่งรายการ</strong><small>แสดงกลุ่มตัวเลือกที่เลือกได้หนึ่งอย่าง</small></span><input id="product-spice-enabled" type="checkbox" role="switch"></label><label class="product-image-field">รูปสินค้า<input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><span class="product-image-preview"><img id="product-image-preview" alt="ตัวอย่างรูปสินค้า" hidden><span id="product-image-placeholder">เลือกรูปหรือถ่ายภาพ</span></span><button type="button" class="text-button danger" id="remove-product-image" hidden>ลบรูป</button></label></div>
       <p class="form-error" id="product-error" role="alert"></p>
       <div class="product-form-actions">
         <button type="button" class="cancel-button" id="cancel-product">ยกเลิก</button>
@@ -207,8 +209,7 @@
       <div class="modal-head"><div><p class="eyebrow">CUSTOMIZE</p><h2 id="item-title">เลือกตัวเลือก</h2></div><button type="button" class="close-button" data-close-dialog="item-dialog" aria-label="ปิด">×</button></div>
       <input type="hidden" id="item-group-id">
       <section class="item-option-section" id="variant-section"><h3>ตัวเลือก</h3><div class="choice-grid" id="variant-options"></div></section>
-      <section class="item-option-section" id="spice-section"><h3>ระดับความเผ็ด</h3><div class="choice-grid compact" id="item-spice-options"></div></section>
-      <section class="item-option-section" id="addon-section"><h3>ของเพิ่ม</h3><div class="choice-grid" id="addon-options"></div></section>
+      <div id="custom-option-sections"></div>
       <section class="item-option-section"><h3>จำนวน</h3><div class="item-quantity"><button type="button" id="item-quantity-minus" aria-label="ลดจำนวน">−</button><strong id="item-quantity">1</strong><button type="button" id="item-quantity-plus" aria-label="เพิ่มจำนวน">＋</button></div></section>
       <section class="item-option-section item-discount-section"><h3>ส่วนลดรายการนี้</h3><div class="discount-inputs"><select id="item-discount-type" aria-label="ประเภทส่วนลดสินค้า"><option value="none">ไม่มีส่วนลด</option><option value="amount">จำนวนเงิน (บาท)</option><option value="percent">เปอร์เซ็นต์ (%)</option></select><input id="item-discount-value" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0" aria-label="จำนวนส่วนลดสินค้า" hidden></div><small>คำนวณจากราคารวมของรายการนี้</small></section>
       <label class="item-note">หมายเหตุ<textarea id="item-note" maxlength="120" rows="2" placeholder="เช่น ไม่ใส่ผัก แยกน้ำ"></textarea></label>
@@ -220,6 +221,6 @@
   <dialog id="receipt-dialog" class="modal receipt-modal"><div class="modal-card" id="receipt-content"></div></dialog>
   <section class="kitchen-print-root" id="kitchen-print-root" aria-hidden="true"></section>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="assets/pos-app.js?v=options-crud-v1"></script>
+  <script type="module" src="assets/pos-app.js?v=option-groups-v1"></script>
 </body>
 </html>

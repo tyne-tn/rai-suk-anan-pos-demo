@@ -31,8 +31,14 @@ const FOOD_ADD_ONS = [
   { id: 'fried-egg', name: 'เพิ่มไข่ดาว', price: 20 },
   { id: 'omelet', name: 'เพิ่มไข่เจียว', price: 20 },
 ];
-const DEFAULT_ADD_ONS = structuredClone(FOOD_ADD_ONS);
-state.options.addOns = Array.isArray(state.options.addOns) ? state.options.addOns : DEFAULT_ADD_ONS;
+const DEFAULT_OPTION_GROUPS = [
+  { id: 'addons', name: 'ของเพิ่ม', selection: 'multiple', choices: structuredClone(FOOD_ADD_ONS) },
+  { id: 'spice', name: 'ระดับความเผ็ด', selection: 'single', choices: SPICE_LEVELS.map((name, index) => ({ id: `spice-${index}`, name, price: 0 })) },
+];
+state.options.groups = Array.isArray(state.options.groups)
+  ? state.options.groups
+  : DEFAULT_OPTION_GROUPS.map((group) => group.id === 'addons' && Array.isArray(state.options.addOns) ? { ...group, choices: structuredClone(state.options.addOns) } : structuredClone(group));
+state.options.addOns = state.options.groups.find((group) => group.id === 'addons')?.choices || [];
 state.options.categories = getProductCategories([
   ...state.products,
   ...(Array.isArray(state.options.categories) ? state.options.categories.map((category) => ({ category })) : []),
@@ -257,27 +263,32 @@ function selectedDraftProduct() {
   return state.products.find((product) => product.id === itemDraft?.productId);
 }
 
+function selectedDraftOptions() {
+  return state.options.groups.flatMap((group) => group.choices
+    .filter((choice) => itemDraft.optionSelections[group.id]?.includes(choice.id))
+    .map((choice) => ({ id: `${group.id}:${choice.id}`, name: `${group.name}: ${choice.name}`, price: Number(choice.price) || 0 })));
+}
+
 function renderItemForm() {
   const product = selectedDraftProduct();
   if (!product) return;
   const variants = state.products.filter((item) => item.active && (item.groupId || item.id) === itemDraft.groupId);
   $('#variant-section').hidden = variants.length < 2;
   $('#variant-options').innerHTML = variants.map((item) => `<button type="button" class="choice-button ${item.id === itemDraft.productId ? 'is-selected' : ''}" data-variant="${escapeHtml(item.id)}"><span>${escapeHtml(item.optionName || item.name)}</span><strong>${money.format(item.price)}</strong></button>`).join('');
-  const spiceEnabled = supportsSpiceLevel(product);
-  $('#spice-section').hidden = !spiceEnabled;
-  if (!spiceEnabled) itemDraft.spiceLevel = undefined;
-  const addOnsEnabled = supportsAddOns(product);
-  $('#addon-section').hidden = !addOnsEnabled;
-  if (!addOnsEnabled) itemDraft.addOnIds = [];
-  $('#item-spice-options').innerHTML = SPICE_LEVELS.map((level) => `<button type="button" class="choice-button ${level === itemDraft.spiceLevel ? 'is-selected' : ''}" data-item-spice="${escapeHtml(level)}">${escapeHtml(level)}</button>`).join('');
-  $('#addon-options').innerHTML = state.options.addOns.map((addOn) => `<button type="button" class="choice-button ${itemDraft.addOnIds.includes(addOn.id) ? 'is-selected' : ''}" data-addon="${escapeHtml(addOn.id)}"><span>${escapeHtml(addOn.name)}</span><strong>+${money.format(addOn.price)}</strong></button>`).join('');
+  const enabledGroups = state.options.groups.filter((group) => group.selection === 'multiple' ? supportsAddOns(product) : supportsSpiceLevel(product));
+  const validGroupIds = new Set(enabledGroups.map((group) => group.id));
+  Object.keys(itemDraft.optionSelections).forEach((groupId) => { if (!validGroupIds.has(groupId)) delete itemDraft.optionSelections[groupId]; });
+  enabledGroups.forEach((group) => {
+    if (group.selection === 'single' && !itemDraft.optionSelections[group.id]?.length && group.choices.length) itemDraft.optionSelections[group.id] = [group.choices[0].id];
+  });
+  $('#custom-option-sections').innerHTML = enabledGroups.map((group) => `<section class="item-option-section"><h3>${escapeHtml(group.name)}</h3><div class="choice-grid ${group.selection === 'single' ? 'compact' : ''}">${group.choices.map((choice) => `<button type="button" class="choice-button ${itemDraft.optionSelections[group.id]?.includes(choice.id) ? 'is-selected' : ''}" data-option-group="${escapeHtml(group.id)}" data-option-choice="${escapeHtml(choice.id)}"><span>${escapeHtml(choice.name)}</span>${choice.price ? `<strong>+${money.format(choice.price)}</strong>` : ''}</button>`).join('')}</div></section>`).join('');
   $('#item-quantity').textContent = itemDraft.quantity;
   const discountType = itemDraft.discount?.type || 'none';
   $('#item-discount-type').value = discountType;
   $('#item-discount-value').hidden = discountType === 'none';
   $('#item-discount-value').value = itemDraft.discount?.value ?? '';
   $('#item-discount-value').max = discountType === 'percent' ? '100' : '';
-  const addOns = addOnsEnabled ? state.options.addOns.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)) : [];
+  const addOns = selectedDraftOptions();
   const totals = calculateCart([{ productId: product.id, quantity: itemDraft.quantity, addOns, discount: itemDraft.discount }], [product]);
   $('#item-total').textContent = money.format(totals.total);
 }
@@ -286,7 +297,7 @@ function openItemForm(groupId) {
   const variants = state.products.filter((product) => product.active && (product.groupId || product.id) === groupId);
   if (!variants.length) return;
   const product = variants[0];
-  itemDraft = { groupId, productId: product.id, quantity: 1, spiceLevel: 'เผ็ดกลาง', addOnIds: [] };
+  itemDraft = { groupId, productId: product.id, quantity: 1, optionSelections: {} };
   $('#item-title').textContent = product.displayName || product.name;
   $('#item-note').value = '';
   $('#item-error').textContent = '';
@@ -298,7 +309,7 @@ function confirmItem(event) {
   event.preventDefault();
   const product = selectedDraftProduct();
   if (!product) return;
-  const addOns = supportsAddOns(product) ? state.options.addOns.filter((addOn) => itemDraft.addOnIds.includes(addOn.id)) : [];
+  const addOns = selectedDraftOptions();
   state.cart.push({
     lineId: globalThis.crypto?.randomUUID?.() || `line-${Date.now()}`,
     productId: product.id,
@@ -306,7 +317,7 @@ function confirmItem(event) {
     addOns,
     discount: itemDraft.discount,
     note: $('#item-note').value.trim(),
-    ...(supportsSpiceLevel(product) ? { spiceLevel: itemDraft.spiceLevel } : {}),
+
   });
   save(STORAGE_KEYS.cart, state.cart);
   $('#item-dialog').close();
@@ -663,9 +674,7 @@ function deleteCategory(category) {
 }
 
 function renderOptionsAdmin() {
-  $('#addon-summary').textContent = state.options.addOns.length
-    ? state.options.addOns.map((addOn) => `${addOn.name} ${money.format(addOn.price)}`).join(' · ')
-    : 'ยังไม่มีของเพิ่ม';
+  $('#option-group-grid').innerHTML = state.options.groups.map((group) => `<article class="catalog-setting-card option-group-card"><span class="catalog-setting-icon">${group.selection === 'single' ? '◉' : '＋'}</span><div><h3>${escapeHtml(group.name)}</h3><p>${group.choices.map((choice) => `${escapeHtml(choice.name)}${choice.price ? ` ${money.format(choice.price)}` : ''}`).join(' · ') || 'ยังไม่มีรายการย่อย'}</p></div><span class="option-group-actions"><button type="button" data-edit-option-group="${escapeHtml(group.id)}" title="แก้ไขกลุ่ม">✎</button><button type="button" data-delete-option-group="${escapeHtml(group.id)}" title="ลบกลุ่ม">⌫</button></span></article>`).join('') || '<div class="held-orders-empty option-groups-empty">ยังไม่มีกลุ่มตัวเลือก กด “เพิ่มกลุ่มตัวเลือก” เพื่อสร้างเอง</div>';
 }
 
 function renderProductAdmin() {
@@ -673,40 +682,65 @@ function renderProductAdmin() {
 }
 
 function renderOptionSettingsRows() {
-  $('#addon-settings').innerHTML = optionDraft.map((addOn) => `<div class="option-setting-row"><label><span>ชื่อของเพิ่ม</span><input data-option-name="${escapeHtml(addOn.id)}" value="${escapeHtml(addOn.name)}" maxlength="30" required></label><label><span>ราคา (บาท)</span><input data-option-price="${escapeHtml(addOn.id)}" type="number" min="1" step="1" value="${addOn.price || ''}" required></label><button type="button" class="option-delete-button" data-delete-option="${escapeHtml(addOn.id)}" title="ลบตัวเลือก" aria-label="ลบ ${escapeHtml(addOn.name || 'ตัวเลือกนี้')}">⌫</button></div>`).join('') || '<div class="held-orders-empty">ยังไม่มีของเพิ่ม กด “เพิ่มของเพิ่ม” เพื่อสร้างรายการ</div>';
+  $('#addon-settings').innerHTML = optionDraft.map((choice) => `<div class="option-setting-row"><label><span>ชื่อตัวเลือก</span><input data-option-name="${escapeHtml(choice.id)}" value="${escapeHtml(choice.name)}" maxlength="30" required></label><label><span>ราคาเพิ่ม (บาท)</span><input data-option-price="${escapeHtml(choice.id)}" type="number" min="0" step="1" value="${choice.price ?? ''}" required></label><button type="button" class="option-delete-button" data-delete-option="${escapeHtml(choice.id)}" title="ลบตัวเลือก" aria-label="ลบ ${escapeHtml(choice.name || 'ตัวเลือกนี้')}">⌫</button></div>`).join('') || '<div class="held-orders-empty">ยังไม่มีรายการย่อย กด “เพิ่มรายการย่อย” เพื่อสร้าง</div>';
 }
 
-function openOptionsForm() {
+function openOptionsForm(groupId = '') {
+  const group = state.options.groups.find((item) => item.id === groupId);
   $('#options-form-error').textContent = '';
-  optionDraft = structuredClone(state.options.addOns);
+  $('#option-group-id').value = group?.id || '';
+  $('#option-group-name').value = group?.name || '';
+  $('#option-group-selection').value = group?.selection || 'multiple';
+  $('#options-form-title').textContent = group ? 'แก้ไขกลุ่มตัวเลือก' : 'เพิ่มกลุ่มตัวเลือก';
+  optionDraft = structuredClone(group?.choices || []);
   renderOptionSettingsRows();
   $('#options-dialog').showModal();
 }
 
 function addOptionRow() {
-  optionDraft.push({ id: globalThis.crypto?.randomUUID?.() || `addon-${Date.now()}`, name: '', price: '' });
+  optionDraft.push({ id: globalThis.crypto?.randomUUID?.() || `choice-${Date.now()}`, name: '', price: 0 });
   renderOptionSettingsRows();
   $('#addon-settings [data-option-name]:last-of-type')?.focus();
 }
 
 function deleteOptionRow(optionId) {
-  optionDraft = optionDraft.filter((addOn) => addOn.id !== optionId);
+  optionDraft = optionDraft.filter((choice) => choice.id !== optionId);
   renderOptionSettingsRows();
+}
+
+function deleteOptionGroup(groupId) {
+  const group = state.options.groups.find((item) => item.id === groupId);
+  if (!group || !window.confirm(`ลบกลุ่มตัวเลือก “${group.name}”?\nออเดอร์เก่าจะยังเก็บรายละเอียดเดิมไว้`)) return;
+  state.options.groups = state.options.groups.filter((item) => item.id !== groupId);
+  state.options.addOns = state.options.groups.find((item) => item.id === 'addons')?.choices || [];
+  save(STORAGE_KEYS.options, state.options);
+  renderOptionsAdmin();
+  showToast('ลบกลุ่มตัวเลือกแล้ว');
 }
 
 function saveOptions(event) {
   event.preventDefault();
   try {
-    state.options.addOns = optionDraft.map((addOn) => {
-      const name = $(`[data-option-name="${addOn.id}"]`).value.trim();
-      const price = Number($(`[data-option-price="${addOn.id}"]`).value);
-      if (!name || !Number.isFinite(price) || price <= 0) throw new Error('กรุณากรอกชื่อและราคาของเพิ่มให้ถูกต้อง');
-      return { id: addOn.id, name, price };
+    const id = $('#option-group-id').value || globalThis.crypto?.randomUUID?.() || `group-${Date.now()}`;
+    const name = $('#option-group-name').value.trim();
+    const selection = $('#option-group-selection').value;
+    if (!name || !['single', 'multiple'].includes(selection)) throw new Error('กรุณากรอกชื่อกลุ่มและวิธีเลือก');
+    if (!optionDraft.length) throw new Error('กรุณาเพิ่มรายการย่อยอย่างน้อย 1 รายการ');
+    const choices = optionDraft.map((choice) => {
+      const choiceName = $(`[data-option-name="${choice.id}"]`).value.trim();
+      const price = Number($(`[data-option-price="${choice.id}"]`).value);
+      if (!choiceName || !Number.isFinite(price) || price < 0) throw new Error('กรุณากรอกชื่อและราคาให้ถูกต้อง');
+      return { id: choice.id, name: choiceName, price };
     });
+    const nextGroup = { id, name, selection, choices };
+    const index = state.options.groups.findIndex((group) => group.id === id);
+    if (index >= 0) state.options.groups[index] = nextGroup;
+    else state.options.groups.push(nextGroup);
+    state.options.addOns = state.options.groups.find((group) => group.id === 'addons')?.choices || [];
     save(STORAGE_KEYS.options, state.options);
     renderOptionsAdmin();
     $('#options-dialog').close();
-    showToast('บันทึกตัวเลือกแล้ว');
+    showToast(index >= 0 ? 'แก้ไขกลุ่มตัวเลือกแล้ว' : 'เพิ่มกลุ่มตัวเลือกแล้ว');
   } catch (error) {
     $('#options-form-error').textContent = error.message;
   }
@@ -850,14 +884,18 @@ $('#item-discount-value').addEventListener('input', updateItemDiscount);
 $('#item-form').addEventListener('click', (event) => {
   if (!itemDraft) return;
   const variant = event.target.closest('[data-variant]');
-  const spice = event.target.closest('[data-item-spice]');
-  const addOn = event.target.closest('[data-addon]');
+  const option = event.target.closest('[data-option-group][data-option-choice]');
   if (variant) itemDraft.productId = variant.dataset.variant;
-  if (spice) itemDraft.spiceLevel = spice.dataset.itemSpice;
-  if (addOn) itemDraft.addOnIds = itemDraft.addOnIds.includes(addOn.dataset.addon) ? itemDraft.addOnIds.filter((id) => id !== addOn.dataset.addon) : [...itemDraft.addOnIds, addOn.dataset.addon];
+  if (option) {
+    const group = state.options.groups.find((item) => item.id === option.dataset.optionGroup);
+    const current = itemDraft.optionSelections[group.id] || [];
+    itemDraft.optionSelections[group.id] = group.selection === 'single'
+      ? [option.dataset.optionChoice]
+      : current.includes(option.dataset.optionChoice) ? current.filter((id) => id !== option.dataset.optionChoice) : [...current, option.dataset.optionChoice];
+  }
   if (event.target.closest('#item-quantity-minus')) itemDraft.quantity = Math.max(1, itemDraft.quantity - 1);
   if (event.target.closest('#item-quantity-plus')) itemDraft.quantity += 1;
-  if (variant || spice || addOn || event.target.closest('#item-quantity-minus, #item-quantity-plus')) renderItemForm();
+  if (variant || option || event.target.closest('#item-quantity-minus, #item-quantity-plus')) renderItemForm();
 });
 $('#clear-cart').addEventListener('click', () => { if ((!state.cart.length && !state.serviceLocation) || window.confirm('ล้างออเดอร์ปัจจุบัน?\nบิลที่พักไว้จะยังอยู่ในหน้ารายการขาย')) { state.cart = []; save(STORAGE_KEYS.cart, state.cart); clearOrderDiscount(); saveServiceLocation(null); setCurrentHeldOrder(); renderCart(); renderHeldOrders(); } });
 $('#order-discount-type').addEventListener('change', updateOrderDiscount);
@@ -882,7 +920,13 @@ $('#add-product').addEventListener('click', () => openProductForm());
 $('.product-management-menu').addEventListener('click', (event) => { const button = event.target.closest('[data-product-section]'); if (button) switchProductSection(button.dataset.productSection); });
 $('#add-category').addEventListener('click', addCategory);
 $('#category-admin-list').addEventListener('click', (event) => { const rename = event.target.closest('[data-rename-category]'); const remove = event.target.closest('[data-delete-category]'); if (rename) renameCategory(rename.dataset.renameCategory); if (remove) deleteCategory(remove.dataset.deleteCategory); });
-$('#manage-options').addEventListener('click', openOptionsForm);
+$('#manage-options').addEventListener('click', () => openOptionsForm());
+$('#option-group-grid').addEventListener('click', (event) => {
+  const edit = event.target.closest('[data-edit-option-group]');
+  const remove = event.target.closest('[data-delete-option-group]');
+  if (edit) openOptionsForm(edit.dataset.editOptionGroup);
+  if (remove) deleteOptionGroup(remove.dataset.deleteOptionGroup);
+});
 $('#add-option-row').addEventListener('click', addOptionRow);
 $('#addon-settings').addEventListener('click', (event) => { const remove = event.target.closest('[data-delete-option]'); if (remove) deleteOptionRow(remove.dataset.deleteOption); });
 $('#options-form').addEventListener('submit', saveOptions);
