@@ -1,4 +1,4 @@
-import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, getProductCategories, groupCatalogProducts, isSameServiceLocation, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=discounts-v1';
+import { DEFAULT_PRODUCTS, DEFAULT_SERVICE_ZONES, SPICE_LEVELS, calculateCart, createHeldOrder, createOrder, getProductCategories, groupCatalogProducts, isSameServiceLocation, renameProductCategory, summarizeOrders, supportsAddOns, supportsSpiceLevel } from './pos-core.js?v=category-link-v1';
 
 const STORAGE_KEYS = {
   products: 'rai-pos-products-v2',
@@ -652,15 +652,15 @@ function renameCategory(category) {
   const name = window.prompt('แก้ไขชื่อหมวดหมู่', category)?.trim();
   if (!name || name === category) return;
   if (state.options.categories.includes(name)) return showToast('มีหมวดหมู่นี้อยู่แล้ว');
-  state.options.categories = state.options.categories.map((item) => item === category ? name : item);
-  state.products.forEach((product) => { if (product.category === category) product.category = name; });
+  state.options.categories = state.options.categories.map((item) => item.trim() === category.trim() ? name : item.trim());
+  const linkedProducts = renameProductCategory(state.products, category, name);
   save(STORAGE_KEYS.options, state.options);
   save(STORAGE_KEYS.products, state.products);
   renderCategories();
   renderProducts();
   renderProductAdmin();
   renderCategoryAdmin();
-  showToast('แก้ไขหมวดหมู่แล้ว');
+  showToast(linkedProducts ? `แก้ไขหมวดหมู่และอัปเดตสินค้า ${linkedProducts.toLocaleString('th-TH')} รายการแล้ว` : 'แก้ไขหมวดหมู่แล้ว หมวดนี้ยังไม่มีสินค้า');
 }
 
 function deleteCategory(category) {
@@ -748,6 +748,11 @@ function saveOptions(event) {
 
 function openProductForm(productId = '') {
   const product = state.products.find((item) => item.id === productId);
+  state.options.categories = getProductCategories([
+    ...state.options.categories.map((category) => ({ category })),
+    ...state.products,
+  ]);
+  renderCategories();
   $('#product-form').reset();
   $('#product-id').value = product?.id || '';
   $('#product-name').value = product?.name || '';

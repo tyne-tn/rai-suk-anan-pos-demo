@@ -3,7 +3,20 @@ import { LOYVERSE_PRODUCTS } from './pos-products.js';
 export const DEFAULT_PRODUCTS = LOYVERSE_PRODUCTS;
 
 export function getProductCategories(products) {
-  return [...new Set(products.map((product) => product.category).filter(Boolean))];
+  return [...new Set(products.map((product) => product.category?.trim()).filter(Boolean))];
+}
+
+export function renameProductCategory(products, oldName, newName) {
+  const source = String(oldName || '').trim();
+  const destination = String(newName || '').trim();
+  if (!source || !destination) return 0;
+  let updated = 0;
+  products.forEach((product) => {
+    if (String(product.category || '').trim() !== source) return;
+    product.category = destination;
+    updated += 1;
+  });
+  return updated;
 }
 
 export function groupCatalogProducts(products) {

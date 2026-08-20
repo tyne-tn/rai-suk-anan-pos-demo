@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_PRODUCTS, getProductCategories, groupCatalogProducts } from '../assets/pos-core.js';
+import { DEFAULT_PRODUCTS, getProductCategories, groupCatalogProducts, renameProductCategory } from '../assets/pos-core.js';
 
 test('Loyverse catalog contains only fixed-price sellable items', () => {
   assert.equal(DEFAULT_PRODUCTS.length, 103);
@@ -17,6 +17,16 @@ test('product editor categories are unique and keep catalog order', () => {
     { category: 'อาหาร' },
     { category: '' },
   ]), ['อาหาร', 'เครื่องดื่ม']);
+});
+
+test('renaming a category updates every linked product and variant', () => {
+  const products = [
+    { id: 'a', category: 'อาหาร' },
+    { id: 'b', category: 'อาหาร ' },
+    { id: 'c', category: 'เครื่องดื่ม' },
+  ];
+  assert.equal(renameProductCategory(products, 'อาหาร', 'อาหารจานหลัก'), 2);
+  assert.deepEqual(products.map((product) => product.category), ['อาหารจานหลัก', 'อาหารจานหลัก', 'เครื่องดื่ม']);
 });
 
 test('Loyverse variants are represented as distinct POS products', () => {
